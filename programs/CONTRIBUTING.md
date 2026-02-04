@@ -1,172 +1,188 @@
-# Contributing Rust Programs
+# Contributing to Token Mint Extensions
 
-This guide is for Rust/Anchor developers who want to contribute program templates to 2022 Wizard.
+This guide explains how to add new extensions to the Token Mint program.
 
-## Overview
+## Quick Start
 
-The wizard generates Solana programs by assembling real, auditable Rust code from this `programs/` directory. Each program type (token-mint, vault, etc.) is a self-contained Anchor project.
+1. Create your extension in `programs/token-mint/extensions/<your-extension>/`
+2. Add injection rules to `programs/token-mint/template.toml`
+3. Run `pnpm extract-templates` from the `scripts/` directory
+4. Test in the wizard UI
 
-## Structure
+## Step-by-Step Guide
+
+### 1. Create the Extension Module
+
+Create a new directory for your extension:
 
 ```
-programs/
-└── token-mint/              # Program type
-    ├── template.toml        # Configuration for the wizard
-    ├── Cargo.toml           # Real Cargo manifest (for testing)
-    ├── Anchor.toml          # Anchor config (for testing)
-    │
-    ├── base/                # Always included
-    │   ├── lib.rs
-    │   ├── instructions/
-    │   │   ├── mod.rs
-    │   │   └── create_mint.rs
-    │   ├── state/
-    │   │   └── mod.rs
-    │   └── error.rs
-    │
-    └── extensions/          # Optional features
-        ├── metadata/
-        │   └── mod.rs
-        ├── transfer-fee/
-        │   ├── mod.rs
-        │   └── update_fee.rs
-        ├── close-mint/
-        │   └── mod.rs
-        └── non-transferable/
-            └── mod.rs
+programs/token-mint/extensions/my-extension/
+├── mod.rs           # Main module (required)
+└── other_file.rs    # Additional files (optional)
 ```
 
-## How to Add Code
+Example `mod.rs`:
 
-### Adding to an Existing Extension
+```rust
+use anchor_lang::prelude::*;
 
-1. Find the extension folder (e.g., `extensions/transfer-fee/`)
-2. Edit the existing `.rs` files
-3. Run `cargo check` to verify it compiles
-4. Submit a PR
-
-### Adding a New Extension
-
-1. Create a new folder under `extensions/`:
-   ```bash
-   mkdir -p programs/token-mint/extensions/my-extension
-   ```
-
-2. Add your Rust files:
-   ```bash
-   touch programs/token-mint/extensions/my-extension/mod.rs
-   ```
-
-3. Update `template.toml` to register the extension:
-   ```toml
-   [extensions.my-extension]
-   id = "my-extension"
-   name = "My Extension"
-   description = "What this extension does"
-   default = false
-   files = [
-       "extensions/my-extension/mod.rs",
-   ]
-   ```
-
-4. If your extension has configuration options:
-   ```toml
-   [extensions.my-extension.config]
-   some_value = { type = "number", name = "Some Value", default = 100 }
-   ```
-
-5. If your extension conflicts with others:
-   ```toml
-   conflicts_with = ["other-extension"]
-   ```
-
-### Adding a New Program Type
-
-1. Create a new folder under `programs/`:
-   ```bash
-   mkdir -p programs/my-program/base
-   mkdir -p programs/my-program/extensions
-   ```
-
-2. Copy the structure from an existing program
-
-3. Create `template.toml` with your program's configuration
-
-4. Add `Cargo.toml` and `Anchor.toml` for testing
-
-## Testing Your Code
-
-```bash
-cd programs/token-mint
-
-# Check compilation
-cargo check
-
-# Run tests (requires Solana toolchain)
-anchor test
-```
-
-## template.toml Reference
-
-### Program Section
-```toml
-[program]
-id = "token-mint"           # Unique identifier
-name = "Token Mint"         # Display name in wizard
-description = "..."         # Description for UI
-version = "0.1.0"           # Semantic version
-```
-
-### Base Section
-```toml
-[base]
-files = [
-    "base/lib.rs",          # Main entry point
-    "base/instructions/mod.rs",
-    # ... more files
-]
-```
-
-### Extension Section
-```toml
-[extensions.my-extension]
-id = "my-extension"         # Unique identifier
-name = "My Extension"       # Display name
-description = "..."         # Tooltip/description
-default = false             # Enabled by default?
-locked = false              # If true, cannot be disabled
-conflicts_with = []         # List of incompatible extension IDs
-files = [                   # Files to include when enabled
-    "extensions/my-extension/mod.rs",
-]
-
-# Optional: configuration fields shown in UI
-[extensions.my-extension.config]
-field_name = { 
-    type = "number",        # number, string, boolean
-    name = "Display Name",
-    description = "Help text",
-    default = 100,
-    min = 0,                # For numbers
-    max = 10000,            # For numbers
+/// Initialize the extension during mint creation
+pub fn init_my_extension(param: u64) -> Result<()> {
+    msg!("My extension initialized with param: {}", param);
+    // Your initialization logic here
+    Ok(())
 }
 ```
 
-## Code Style
+### 2. Define the Extension in template.toml
 
-- Use 4 spaces for indentation
-- Add doc comments (`///`) to public functions and structs
-- Include `msg!()` logs for important operations
-- Define errors in dedicated error enums
+Add your extension to `programs/token-mint/template.toml`:
 
-## Security Guidelines
+```toml
+[extensions.my-extension]
+name = "My Extension"
+description = "What this extension does"
+default = false
+conflicts_with = []  # List extensions that can't be used together
+files = ["extensions/my-extension/mod.rs"]
 
-- All code will be audited before release
-- Follow Anchor best practices
-- Validate all inputs
-- Use checked math operations
-- Document security considerations in comments
+# Optional: Add configurable parameters
+[extensions.my-extension.config]
+my_param = { type = "number", name = "My Parameter", default = 100 }
 
-## Questions?
+# Inject into lib.rs
+[extensions.my-extension.inject.lib]
+modules = "pub mod my_extension;"
 
-Open an issue on GitHub or reach out to the team.
+# Inject into create_mint instruction
+[extensions.my-extension.inject.create_mint]
+imports = "use crate::my_extension;"
+args = ["my_param: u64"]
+body = """
+    // Initialize my extension
+    my_extension::init_my_extension(my_param)?;"""
+```
+
+### 3. Extract Templates
+
+Run the extraction script to generate TypeScript code:
+
+```bash
+cd scripts
+pnpm extract-templates
+```
+
+This generates `apps/web/lib/codegen/generated/token-mint.ts` with your extension.
+
+### 4. Test Your Extension
+
+Start the dev server and test:
+
+```bash
+pnpm dev
+```
+
+Visit `http://localhost:3000/wizard/token` and toggle your extension.
+
+## Injection Types Reference
+
+### `modules` (lib.rs)
+Adds module declarations:
+```toml
+modules = "pub mod my_extension;"
+```
+→ Inserted after `pub mod error;` in lib.rs
+
+### `instructions` (lib.rs)
+Adds new program instructions:
+```toml
+instructions = """
+    pub fn my_instruction(ctx: Context<MyInstruction>) -> Result<()> {
+        my_extension::handler(ctx)
+    }"""
+```
+→ Inserted inside the `#[program]` module
+
+### `imports` (instruction files)
+Adds use statements:
+```toml
+imports = "use crate::my_extension;"
+```
+→ Inserted after existing imports
+
+### `args` (instruction files)
+Adds function parameters:
+```toml
+args = ["my_param: u64", "another_param: bool"]
+```
+→ Added to function signature AND `#[instruction]` macro
+
+### `body` (instruction files)
+Adds execution code:
+```toml
+body = """
+    // Your code here
+    my_extension::do_something()?;"""
+```
+→ Inserted before `Ok(())`
+
+### `accounts` (instruction files)
+Adds account fields:
+```toml
+accounts = """
+    /// My account description
+    pub my_account: Signer<'info>,"""
+```
+→ Added to the Accounts struct
+
+## Best Practices
+
+### 1. Keep Extensions Focused
+Each extension should do one thing well. If you need multiple features, consider separate extensions.
+
+### 2. Document Conflicts
+If your extension conflicts with another (e.g., non-transferable + transfer-fee), declare it:
+```toml
+conflicts_with = ["non-transferable"]
+```
+
+### 3. Provide Good Defaults
+For config fields, always set sensible defaults:
+```toml
+[extensions.my-extension.config]
+amount = { type = "number", name = "Amount", default = 1000, min = 1 }
+```
+
+### 4. Write Clear Body Injections
+Add comments to injected code:
+```toml
+body = """
+    // My Extension: Initialize the foo configuration
+    my_extension::init_foo(param)?;
+    msg!("Foo initialized");"""
+```
+
+### 5. Test Combinations
+Test your extension with other extensions enabled/disabled to catch injection conflicts.
+
+## Troubleshooting
+
+### "File not found" error
+Ensure all files listed in `files = [...]` exist.
+
+### Injection in wrong location
+Check that base files have the expected patterns (see TEMPLATE_SCHEMA.md).
+
+### TypeScript errors after extraction
+Run `pnpm build` to see detailed errors. Common issues:
+- Unescaped backticks in Rust code
+- Template literal syntax `${}` in Rust strings
+
+## CI/CD
+
+Pull requests automatically run `extract-templates` and validate:
+- All referenced files exist
+- template.toml is valid TOML
+- Generated TypeScript compiles
+
+If CI fails, check the action logs for details.

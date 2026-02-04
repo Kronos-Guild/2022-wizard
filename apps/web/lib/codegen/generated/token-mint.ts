@@ -1,9 +1,18 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT
- * 
+ *
  * Generated from: programs/token-mint/
  * Run "pnpm extract-templates" to regenerate.
+ *
+ * This file contains:
+ * - Base file templates
+ * - Extension injection rules
+ * - Extension metadata
  */
+
+// =============================================================================
+// Program Info
+// =============================================================================
 
 export const programInfo = {
   id: "token-mint",
@@ -12,8 +21,12 @@ export const programInfo = {
   version: "0.1.0",
 } as const;
 
+// =============================================================================
+// Base Files (always included)
+// =============================================================================
+
 export const baseFiles = {
-  "lib.rs": `use anchor_lang::prelude::*;
+  lib: `use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -46,15 +59,8 @@ pub mod token_mint {
     }
 }
 `,
-  "mod.rs": `/// State module for Token Mint program
-///
-/// Add any program state structs here.
-/// These are typically PDA accounts that store program configuration.
-
-/// Seed for mint authority PDA (when using PDA authority mode)
-pub const MINT_AUTHORITY_SEED: &[u8] = b"mint_authority";
-`,
-  "create_mint.rs": `use anchor_lang::prelude::*;
+  instructions: {
+    "create_mint": `use anchor_lang::prelude::*;
 use anchor_spl::token_2022::Token2022;
 
 /// Creates a new Token-2022 mint.
@@ -100,7 +106,17 @@ pub struct CreateMint<'info> {
     pub system_program: Program<'info, System>,
 }
 `,
-  "error.rs": `use anchor_lang::prelude::*;
+  },
+  other: {
+    "mod.rs": `/// State module for Token Mint program
+///
+/// Add any program state structs here.
+/// These are typically PDA accounts that store program configuration.
+
+/// Seed for mint authority PDA (when using PDA authority mode)
+pub const MINT_AUTHORITY_SEED: &[u8] = b"mint_authority";
+`,
+    "error.rs": `use anchor_lang::prelude::*;
 
 /// Custom errors for the Token Mint program
 #[error_code]
@@ -122,17 +138,69 @@ pub enum TokenMintError {
     InvalidDecimals,
 }
 `,
+  },
 } as const;
 
-export const extensions = {
+// =============================================================================
+// Extension Definitions with Injection Rules
+// =============================================================================
+
+export interface LibInjection {
+  modules?: string;
+  instructions?: string;
+}
+
+export interface InstructionInjection {
+  imports?: string;
+  args?: string[];
+  body?: string;
+  accounts?: string;
+}
+
+export interface Extension {
+  name: string;
+  description: string;
+  default: boolean;
+  locked: boolean;
+  conflictsWith: string[];
+  config?: Record<string, {
+    type: string;
+    name: string;
+    description?: string;
+    default?: number | string | boolean;
+    min?: number;
+    max?: number;
+  }>;
+  inject: {
+    lib?: LibInjection;
+    [instructionId: string]: LibInjection | InstructionInjection | undefined;
+  };
+  files: Record<string, string>;
+}
+
+export const extensions: Record<string, Extension> = {
   "metadata": {
-    id: "metadata",
     name: "Metadata",
     description: "Store token name, symbol, and URI on-chain using Token-2022 metadata extension",
     default: true,
     locked: true,
     conflictsWith: [],
     config: undefined,
+    inject: {
+      lib: {
+        modules: `pub mod metadata;`,
+        instructions: undefined,
+      },
+      "create_mint": {
+        imports: `use crate::metadata;`,
+        args: undefined,
+        body: `    // Initialize metadata extension
+    metadata::validate_metadata(&name, &symbol)?;
+    let _metadata = metadata::init_metadata(name.clone(), symbol.clone(), uri.clone())?;
+    msg!("Metadata extension initialized");`,
+        accounts: undefined,
+      },
+    },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
 use spl_token_metadata_interface::state::TokenMetadata;
@@ -187,14 +255,13 @@ pub enum MetadataError {
     },
   },
   "transfer-fee": {
-    id: "transfer-fee",
     name: "Transfer Fee",
     description: "Charge a percentage fee on every token transfer",
     default: false,
     locked: false,
     conflictsWith: ["non-transferable"],
     config: {
-        "fee_bps": {
+        "fee_basis_points": {
             "type": "number",
             "name": "Fee (Basis Points)",
             "description": "100 = 1%",
@@ -209,6 +276,30 @@ pub enum MetadataError {
             "default": 1000000,
             "min": 0
         }
+    },
+    inject: {
+      lib: {
+        modules: `pub mod transfer_fee;`,
+        instructions: `
+    /// Updates the transfer fee configuration.
+    /// Only the fee authority can call this.
+    pub fn update_transfer_fee(
+        ctx: Context<UpdateTransferFee>,
+        fee_basis_points: u16,
+        max_fee: u64,
+    ) -> Result<()> {
+        transfer_fee::update_fee::handler(ctx, fee_basis_points, max_fee)
+    }`,
+      },
+      "create_mint": {
+        imports: `use crate::transfer_fee;`,
+        args: ["fee_basis_points: u16","max_fee: u64"],
+        body: `    // Initialize transfer fee extension
+    let _fee_config = transfer_fee::init_transfer_fee(fee_basis_points, max_fee)?;
+    msg!("Transfer fee extension initialized: {} bps, max {}", fee_basis_points, max_fee);`,
+        accounts: `    /// The fee authority that can update and collect fees
+    pub fee_authority: Signer<'info>,`,
+      },
     },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
@@ -325,13 +416,31 @@ pub struct UpdateTransferFee<'info> {
     },
   },
   "close-mint": {
-    id: "close-mint",
     name: "Close Mint",
     description: "Allow the mint authority to close the mint and reclaim rent",
     default: false,
     locked: false,
     conflictsWith: [],
     config: undefined,
+    inject: {
+      lib: {
+        modules: `pub mod close_mint;`,
+        instructions: `
+    /// Closes the mint account and returns rent to the destination.
+    /// Requires total supply to be 0.
+    pub fn close_mint(ctx: Context<CloseMint>) -> Result<()> {
+        close_mint::handler(ctx)
+    }`,
+      },
+      "create_mint": {
+        imports: `use crate::close_mint;`,
+        args: undefined,
+        body: `    // Close mint extension enabled - mint can be closed when supply is 0
+    msg!("Close mint extension enabled");`,
+        accounts: `    /// The close authority that can close the mint
+    pub close_authority: Signer<'info>,`,
+      },
+    },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
 use anchor_spl::token_2022::Token2022;
@@ -392,13 +501,26 @@ pub enum CloseMintError {
     },
   },
   "non-transferable": {
-    id: "non-transferable",
     name: "Non-Transferable",
     description: "Make tokens soulbound - they cannot be transferred after minting",
     default: false,
     locked: false,
     conflictsWith: ["transfer-fee"],
     config: undefined,
+    inject: {
+      lib: {
+        modules: `pub mod non_transferable;`,
+        instructions: undefined,
+      },
+      "create_mint": {
+        imports: `use crate::non_transferable;`,
+        args: undefined,
+        body: `    // Initialize non-transferable (soulbound) extension
+    let _config = non_transferable::init_non_transferable()?;
+    msg!("Non-transferable extension initialized - tokens are soulbound");`,
+        accounts: undefined,
+      },
+    },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
 
@@ -459,6 +581,140 @@ pub enum NonTransferableError {
 `,
     },
   },
-} as const;
+};
 
 export type ExtensionId = keyof typeof extensions;
+
+// =============================================================================
+// Code Assembly Functions
+// =============================================================================
+
+/**
+ * Assembles lib.rs with enabled extensions injected.
+ * @param enabledExtensions - List of enabled extension IDs
+ * @param programName - The program name in snake_case (e.g., "my_token")
+ */
+export function assembleLib(enabledExtensions: ExtensionId[], programName?: string): string {
+  let code: string = baseFiles.lib;
+
+  // Replace program module name if provided
+  if (programName) {
+    code = code.replace(/pub mod token_mint/, `pub mod ${programName}`);
+  }
+
+  // Collect all module declarations and instructions to inject
+  const modules: string[] = [];
+  const instructions: string[] = [];
+
+  for (const extId of enabledExtensions) {
+    const ext = extensions[extId];
+    if (ext?.inject?.lib) {
+      if (ext.inject.lib.modules) {
+        modules.push(ext.inject.lib.modules);
+      }
+      if (ext.inject.lib.instructions) {
+        instructions.push(ext.inject.lib.instructions);
+      }
+    }
+  }
+
+  // Inject modules after the last "pub mod" line
+  if (modules.length > 0) {
+    const moduleLines = modules.join("\n");
+    // Find the last "pub mod" line and inject after it
+    code = code.replace(
+      /(pub mod error;)/,
+      `$1\n\n// Extension modules\n${moduleLines}`
+    );
+  }
+
+  // Inject instructions before the closing brace of the program module
+  if (instructions.length > 0) {
+    const instrCode = instructions.join("\n");
+    // Find the create_mint function's closing and add instructions after it
+    code = code.replace(
+      /(instructions::create_mint::handler\([^)]+\)\s*})/,
+      `$1\n${instrCode}`
+    );
+  }
+
+  return code;
+}
+
+/**
+ * Assembles an instruction file with enabled extensions injected.
+ */
+export function assembleInstruction(
+  instructionId: string,
+  enabledExtensions: ExtensionId[],
+  extensionConfigs?: Record<string, Record<string, unknown>>
+): string {
+  const baseCode = baseFiles.instructions[instructionId as keyof typeof baseFiles.instructions];
+  if (!baseCode) {
+    throw new Error(`Unknown instruction: ${instructionId}`);
+  }
+
+  let code: string = baseCode;
+
+  // Collect injections
+  const imports: string[] = [];
+  const args: string[] = [];
+  const bodyParts: string[] = [];
+  const accounts: string[] = [];
+
+  for (const extId of enabledExtensions) {
+    const ext = extensions[extId];
+    const injection = ext?.inject?.[instructionId] as InstructionInjection | undefined;
+    if (injection) {
+      if (injection.imports) imports.push(injection.imports);
+      if (injection.args) args.push(...injection.args);
+      if (injection.body) bodyParts.push(injection.body);
+      if (injection.accounts) accounts.push(injection.accounts);
+    }
+  }
+
+  // Inject imports after the last "use" statement
+  if (imports.length > 0) {
+    const importCode = imports.join("\n");
+    code = code.replace(
+      /(use anchor_spl::token_2022::Token2022;)/,
+      `$1\n\n// Extension imports\n${importCode}`
+    );
+  }
+
+  // Inject args into function signature and #[instruction] macro
+  if (args.length > 0) {
+    const argsStr = args.join(",\n    ");
+    // Add to function signature
+    code = code.replace(
+      /decimals: u8,\n\) -> Result<\(\)>/,
+      `decimals: u8,\n    // Extension arguments\n    ${argsStr},\n) -> Result<()>`
+    );
+    // Add to #[instruction] macro
+    const instrArgs = args.map(a => a.split(":")[0].trim()).join(", ");
+    code = code.replace(
+      /(#\[instruction\([^)]+)(\)\])/,
+      `$1, ${instrArgs}$2`
+    );
+  }
+
+  // Inject body code before Ok(())
+  if (bodyParts.length > 0) {
+    const bodyCode = bodyParts.join("\n\n");
+    code = code.replace(
+      /(\n\s*Ok\(\(\)\)\n})/,
+      `\n${bodyCode}\n\n    Ok(())\n}`
+    );
+  }
+
+  // Inject accounts before the closing brace of the Accounts struct
+  if (accounts.length > 0) {
+    const accountsCode = accounts.join("\n\n");
+    code = code.replace(
+      /(pub system_program: Program<'info, System>,\n})/,
+      `pub system_program: Program<'info, System>,\n\n    // Extension accounts\n${accountsCode}\n}`
+    );
+  }
+
+  return code;
+}

@@ -183,11 +183,10 @@ export function CodePreview({ state }: CodePreviewProps) {
       {/* File tabs */}
       <div className="-mx-4 border-b border-foreground/10 pb-3 sm:-mx-6">
         <div className="relative">
-          {/* Fade edges for mobile scroll */}
-          <div className="pointer-events-none absolute left-0 top-0 bottom-1 w-8 bg-gradient-to-r from-background to-transparent z-10 lg:hidden" />
-          <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-background to-transparent z-10 lg:hidden" />
+          {/* Fade on right edge to indicate more content */}
+          <div className="pointer-events-none absolute right-0 top-0 bottom-3 w-12 bg-gradient-to-l from-neutral-50 dark:from-neutral-900 to-transparent z-10" />
 
-          <div className="flex gap-2 overflow-x-auto scrollbar-subtle px-4 pb-1 sm:px-6">
+          <div className="flex gap-2 overflow-x-scroll scrollbar-visible px-4 pb-2 sm:px-6">
             {files.map((file) => {
               const isActive = activeFileId === file.id;
               const pulses = filePulses.get(file.id) || [];

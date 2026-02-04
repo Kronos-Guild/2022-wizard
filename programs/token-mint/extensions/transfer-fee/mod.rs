@@ -1,5 +1,35 @@
 use anchor_lang::prelude::*;
 
+// =============================================================================
+// Wizard Injection Markers
+// =============================================================================
+// These comments tell the wizard what code to inject into base files.
+
+// @wizard:inject.lib.modules
+pub mod transfer_fee;
+// @wizard:end
+
+// @wizard:inject.create_mint.imports
+use crate::transfer_fee;
+// @wizard:end
+
+// @wizard:inject.create_mint.args fee_basis_points: u16, max_fee: u64
+
+// @wizard:inject.create_mint.body
+    // Initialize transfer fee extension
+    let _fee_config = transfer_fee::init_transfer_fee(fee_basis_points, max_fee)?;
+    msg!("Transfer fee extension initialized: {} bps, max {}", fee_basis_points, max_fee);
+// @wizard:end
+
+// @wizard:inject.create_mint.accounts
+    /// The fee authority that can update and collect fees
+    pub fee_authority: Signer<'info>,
+// @wizard:end
+
+// =============================================================================
+// Extension Implementation
+// =============================================================================
+
 /// Maximum allowed transfer fee in basis points (100% = 10000 bps)
 pub const MAX_FEE_BASIS_POINTS: u16 = 10000;
 

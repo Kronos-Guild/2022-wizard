@@ -1,16 +1,19 @@
 # Token Mint Program Template Configuration
 # 
 # This file defines how the wizard assembles the program from base and extension files.
-# Rust contributors: Edit the .rs files, update this config if adding new extensions.
+# Rust contributors: Edit the .rs files with @wizard marker comments.
 #
-# HOW INJECTIONS WORK:
-# - Extensions declare what code to inject into base files
-# - The extraction script programmatically inserts code at known locations:
-#   - "modules" -> after the last `pub mod` line in lib.rs
-#   - "imports" -> after the last `use` statement in instruction files  
-#   - "body" -> before the final `Ok(())` in handler functions
-#   - "accounts" -> before the closing `}` of Accounts structs
-#   - "args" -> added to function signature and #[instruction] macro
+# INJECTION MARKERS IN RUST FILES:
+# Extensions use marker comments in their .rs files to declare injections:
+#   // @wizard:inject.<target>.<type>
+#   ... code ...
+#   // @wizard:end
+#
+# For args (single line):
+#   // @wizard:inject.create_mint.args fee_basis_points: u16, max_fee: u64
+#
+# Targets: "lib" or instruction id (e.g., "create_mint")
+# Types: "modules", "instructions", "imports", "args", "body", "accounts"
 
 [program]
 id = "token-mint"
@@ -33,8 +36,8 @@ other = [
 # =============================================================================
 # EXTENSIONS
 # =============================================================================
-# Each extension can inject code into base files.
-# Rust devs write the extension module, then declare injections here.
+# Each extension declares its files. Injection rules are defined in the .rs files
+# using @wizard marker comments (see extensions/*/mod.rs for examples).
 
 [extensions.metadata]
 name = "Metadata"
@@ -42,19 +45,6 @@ description = "Store token name, symbol, and URI on-chain using Token-2022 metad
 default = true
 locked = true  # Cannot be disabled - always included
 files = ["extensions/metadata/mod.rs"]
-
-# Inject into lib.rs
-[extensions.metadata.inject.lib]
-modules = "pub mod metadata;"
-
-# Inject into create_mint instruction
-[extensions.metadata.inject.create_mint]
-imports = "use crate::metadata;"
-body = """
-    // Initialize metadata extension
-    metadata::validate_metadata(&name, &symbol)?;
-    let _metadata = metadata::init_metadata(name.clone(), symbol.clone(), uri.clone())?;
-    msg!("Metadata extension initialized");"""
 
 # -----------------------------------------------------------------------------
 
@@ -73,34 +63,6 @@ files = [
 fee_basis_points = { type = "number", name = "Fee (Basis Points)", description = "100 = 1%", default = 100, min = 0, max = 10000 }
 max_fee = { type = "number", name = "Max Fee", description = "Maximum fee in token units", default = 1000000, min = 0 }
 
-# Inject into lib.rs
-[extensions.transfer-fee.inject.lib]
-modules = "pub mod transfer_fee;"
-# Add update_fee instruction to the program
-instructions = """
-
-    /// Updates the transfer fee configuration.
-    /// Only the fee authority can call this.
-    pub fn update_transfer_fee(
-        ctx: Context<UpdateTransferFee>,
-        fee_basis_points: u16,
-        max_fee: u64,
-    ) -> Result<()> {
-        transfer_fee::update_fee::handler(ctx, fee_basis_points, max_fee)
-    }"""
-
-# Inject into create_mint instruction
-[extensions.transfer-fee.inject.create_mint]
-imports = "use crate::transfer_fee;"
-args = ["fee_basis_points: u16", "max_fee: u64"]
-body = """
-    // Initialize transfer fee extension
-    let _fee_config = transfer_fee::init_transfer_fee(fee_basis_points, max_fee)?;
-    msg!("Transfer fee extension initialized: {} bps, max {}", fee_basis_points, max_fee);"""
-accounts = """
-    /// The fee authority that can update and collect fees
-    pub fee_authority: Signer<'info>,"""
-
 # -----------------------------------------------------------------------------
 
 [extensions.close-mint]
@@ -108,27 +70,6 @@ name = "Close Mint"
 description = "Allow the mint authority to close the mint and reclaim rent"
 default = false
 files = ["extensions/close-mint/mod.rs"]
-
-# Inject into lib.rs  
-[extensions.close-mint.inject.lib]
-modules = "pub mod close_mint;"
-instructions = """
-
-    /// Closes the mint account and returns rent to the destination.
-    /// Requires total supply to be 0.
-    pub fn close_mint(ctx: Context<CloseMint>) -> Result<()> {
-        close_mint::handler(ctx)
-    }"""
-
-# Inject into create_mint instruction
-[extensions.close-mint.inject.create_mint]
-imports = "use crate::close_mint;"
-body = """
-    // Close mint extension enabled - mint can be closed when supply is 0
-    msg!("Close mint extension enabled");"""
-accounts = """
-    /// The close authority that can close the mint
-    pub close_authority: Signer<'info>,"""
 
 # -----------------------------------------------------------------------------
 
@@ -138,15 +79,3 @@ description = "Make tokens soulbound - they cannot be transferred after minting"
 default = false
 conflicts_with = ["transfer-fee"]
 files = ["extensions/non-transferable/mod.rs"]
-
-# Inject into lib.rs
-[extensions.non-transferable.inject.lib]
-modules = "pub mod non_transferable;"
-
-# Inject into create_mint instruction
-[extensions.non-transferable.inject.create_mint]
-imports = "use crate::non_transferable;"
-body = """
-    // Initialize non-transferable (soulbound) extension
-    let _config = non_transferable::init_non_transferable()?;
-    msg!("Non-transferable extension initialized - tokens are soulbound");"""

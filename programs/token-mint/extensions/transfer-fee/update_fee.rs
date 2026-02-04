@@ -3,6 +3,27 @@ use anchor_spl::token_2022::Token2022;
 
 use super::{TransferFeeConfig, TransferFeeError, MAX_FEE_BASIS_POINTS};
 
+// =============================================================================
+// Wizard Injection Markers
+// =============================================================================
+
+// @wizard:inject.lib.instructions
+
+/// Updates the transfer fee configuration.
+/// Only the fee authority can call this.
+pub fn update_transfer_fee(
+    ctx: Context<UpdateTransferFee>,
+    fee_basis_points: u16,
+    max_fee: u64,
+) -> Result<()> {
+    transfer_fee::update_fee::handler(ctx, fee_basis_points, max_fee)
+}
+// @wizard:end
+
+// =============================================================================
+// Handler Implementation
+// =============================================================================
+
 /// Updates the transfer fee configuration for a mint.
 ///
 /// Only the fee authority can update the fee.

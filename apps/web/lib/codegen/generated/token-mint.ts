@@ -205,6 +205,29 @@ export const extensions: Record<string, Extension> = {
       "mod.rs": `use anchor_lang::prelude::*;
 use spl_token_metadata_interface::state::TokenMetadata;
 
+// =============================================================================
+// Wizard Injection Markers
+// =============================================================================
+
+// @wizard:inject.lib.modules
+pub mod metadata;
+// @wizard:end
+
+// @wizard:inject.create_mint.imports
+use crate::metadata;
+// @wizard:end
+
+// @wizard:inject.create_mint.body
+    // Initialize metadata extension
+    metadata::validate_metadata(&name, &symbol)?;
+    let _metadata = metadata::init_metadata(name.clone(), symbol.clone(), uri.clone())?;
+    msg!("Metadata extension initialized");
+// @wizard:end
+
+// =============================================================================
+// Extension Implementation
+// =============================================================================
+
 /// Initialize metadata extension for the mint.
 ///
 /// This adds on-chain metadata (name, symbol, uri) to the token using
@@ -281,15 +304,15 @@ pub enum MetadataError {
       lib: {
         modules: `pub mod transfer_fee;`,
         instructions: `
-    /// Updates the transfer fee configuration.
-    /// Only the fee authority can call this.
-    pub fn update_transfer_fee(
-        ctx: Context<UpdateTransferFee>,
-        fee_basis_points: u16,
-        max_fee: u64,
-    ) -> Result<()> {
-        transfer_fee::update_fee::handler(ctx, fee_basis_points, max_fee)
-    }`,
+/// Updates the transfer fee configuration.
+/// Only the fee authority can call this.
+pub fn update_transfer_fee(
+    ctx: Context<UpdateTransferFee>,
+    fee_basis_points: u16,
+    max_fee: u64,
+) -> Result<()> {
+    transfer_fee::update_fee::handler(ctx, fee_basis_points, max_fee)
+}`,
       },
       "create_mint": {
         imports: `use crate::transfer_fee;`,
@@ -303,6 +326,36 @@ pub enum MetadataError {
     },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
+
+// =============================================================================
+// Wizard Injection Markers
+// =============================================================================
+// These comments tell the wizard what code to inject into base files.
+
+// @wizard:inject.lib.modules
+pub mod transfer_fee;
+// @wizard:end
+
+// @wizard:inject.create_mint.imports
+use crate::transfer_fee;
+// @wizard:end
+
+// @wizard:inject.create_mint.args fee_basis_points: u16, max_fee: u64
+
+// @wizard:inject.create_mint.body
+    // Initialize transfer fee extension
+    let _fee_config = transfer_fee::init_transfer_fee(fee_basis_points, max_fee)?;
+    msg!("Transfer fee extension initialized: {} bps, max {}", fee_basis_points, max_fee);
+// @wizard:end
+
+// @wizard:inject.create_mint.accounts
+    /// The fee authority that can update and collect fees
+    pub fee_authority: Signer<'info>,
+// @wizard:end
+
+// =============================================================================
+// Extension Implementation
+// =============================================================================
 
 /// Maximum allowed transfer fee in basis points (100% = 10000 bps)
 pub const MAX_FEE_BASIS_POINTS: u16 = 10000;
@@ -375,6 +428,27 @@ use anchor_spl::token_2022::Token2022;
 
 use super::{TransferFeeConfig, TransferFeeError, MAX_FEE_BASIS_POINTS};
 
+// =============================================================================
+// Wizard Injection Markers
+// =============================================================================
+
+// @wizard:inject.lib.instructions
+
+/// Updates the transfer fee configuration.
+/// Only the fee authority can call this.
+pub fn update_transfer_fee(
+    ctx: Context<UpdateTransferFee>,
+    fee_basis_points: u16,
+    max_fee: u64,
+) -> Result<()> {
+    transfer_fee::update_fee::handler(ctx, fee_basis_points, max_fee)
+}
+// @wizard:end
+
+// =============================================================================
+// Handler Implementation
+// =============================================================================
+
 /// Updates the transfer fee configuration for a mint.
 ///
 /// Only the fee authority can update the fee.
@@ -444,6 +518,41 @@ pub struct UpdateTransferFee<'info> {
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
 use anchor_spl::token_2022::Token2022;
+
+// =============================================================================
+// Wizard Injection Markers
+// =============================================================================
+
+// @wizard:inject.lib.modules
+pub mod close_mint;
+// @wizard:end
+
+// @wizard:inject.lib.instructions
+
+    /// Closes the mint account and returns rent to the destination.
+    /// Requires total supply to be 0.
+    pub fn close_mint(ctx: Context<CloseMint>) -> Result<()> {
+        close_mint::handler(ctx)
+    }
+// @wizard:end
+
+// @wizard:inject.create_mint.imports
+use crate::close_mint;
+// @wizard:end
+
+// @wizard:inject.create_mint.body
+    // Close mint extension enabled - mint can be closed when supply is 0
+    msg!("Close mint extension enabled");
+// @wizard:end
+
+// @wizard:inject.create_mint.accounts
+    /// The close authority that can close the mint
+    pub close_authority: Signer<'info>,
+// @wizard:end
+
+// =============================================================================
+// Extension Implementation
+// =============================================================================
 
 /// Close mint extension allows the mint authority to close the mint
 /// account and reclaim the rent.
@@ -523,6 +632,28 @@ pub enum CloseMintError {
     },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
+
+// =============================================================================
+// Wizard Injection Markers
+// =============================================================================
+
+// @wizard:inject.lib.modules
+pub mod non_transferable;
+// @wizard:end
+
+// @wizard:inject.create_mint.imports
+use crate::non_transferable;
+// @wizard:end
+
+// @wizard:inject.create_mint.body
+    // Initialize non-transferable (soulbound) extension
+    let _config = non_transferable::init_non_transferable()?;
+    msg!("Non-transferable extension initialized - tokens are soulbound");
+// @wizard:end
+
+// =============================================================================
+// Extension Implementation
+// =============================================================================
 
 /// Non-transferable (Soulbound) token extension.
 ///

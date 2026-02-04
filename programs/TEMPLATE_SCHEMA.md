@@ -1,15 +1,14 @@
 # Template Schema Reference
 
-This document describes the `template.toml` schema used to define Solana program templates for the wizard.
+This document describes the `template.toml` schema and `@wizard` marker comments used to define Solana program templates for the wizard.
 
 ## Overview
 
-Each program in `programs/<program-name>/` must have a `template.toml` file that defines:
-- Program metadata
-- Base files (always included)
-- Extensions (optional features that inject code)
+Each program in `programs/<program-name>/` requires:
+1. A `template.toml` file defining program metadata and extension config
+2. Rust files with `@wizard` marker comments declaring code injections
 
-## Schema
+## template.toml Schema
 
 ### `[program]` - Required
 
@@ -74,56 +73,97 @@ fee_basis_points = {
     min = 0,                   # Minimum (for numbers)
     max = 10000                # Maximum (for numbers)
 }
-max_fee = { 
-    type = "number", 
-    name = "Max Fee", 
-    description = "Maximum fee in token units", 
-    default = 1000000, 
-    min = 0 
-}
 ```
 
-### `[extensions.<extension-id>.inject]` - Required for extensions
+## Marker Comments (Injection Declarations)
 
-Defines what code to inject into base files when the extension is enabled.
+Instead of declaring injections in `template.toml`, use `@wizard` marker comments directly in your Rust files. This keeps the injection code close to the source and avoids duplication.
 
-#### Inject into lib.rs
+### Syntax
 
-```toml
-[extensions.transfer-fee.inject.lib]
-modules = "pub mod transfer_fee;"     # Added after the last `pub mod` line
+**Block markers** (multi-line):
+```rust
+// @wizard:inject.<target>.<type>
+... code to inject ...
+// @wizard:end
+```
 
-instructions = """
-    /// Updates the transfer fee
+**Inline markers** (for args only):
+```rust
+// @wizard:inject.<target>.args arg1: Type1, arg2: Type2
+```
+
+### Target
+
+- `lib` - Inject into `lib.rs`
+- `<instruction_id>` - Inject into an instruction file (e.g., `create_mint`)
+
+### Types
+
+| Type | Target | Description |
+|------|--------|-------------|
+| `modules` | lib | Module declaration (`pub mod foo;`) |
+| `instructions` | lib | New instruction function in `#[program]` module |
+| `imports` | instruction | Use statements |
+| `args` | instruction | Function parameters (also added to `#[instruction]`) |
+| `body` | instruction | Code injected before `Ok(())` |
+| `accounts` | instruction | Account fields in Accounts struct |
+
+### Examples
+
+**Module declaration** (injected into lib.rs):
+```rust
+// @wizard:inject.lib.modules
+pub mod transfer_fee;
+// @wizard:end
+```
+
+**New instruction** (injected into lib.rs):
+```rust
+// @wizard:inject.lib.instructions
+
+    /// Updates the transfer fee configuration.
     pub fn update_transfer_fee(
         ctx: Context<UpdateTransferFee>,
         fee_basis_points: u16,
     ) -> Result<()> {
         transfer_fee::update_fee::handler(ctx, fee_basis_points)
-    }"""                              # Added inside the #[program] module
+    }
+// @wizard:end
 ```
 
-#### Inject into instruction files
+**Imports** (injected into instruction file):
+```rust
+// @wizard:inject.create_mint.imports
+use crate::transfer_fee;
+// @wizard:end
+```
 
-```toml
-[extensions.transfer-fee.inject.create_mint]  # Matches instruction id from [base]
-imports = "use crate::transfer_fee;"          # Added after existing `use` statements
+**Args** (single line format):
+```rust
+// @wizard:inject.create_mint.args fee_basis_points: u16, max_fee: u64
+```
 
-args = ["fee_basis_points: u16", "max_fee: u64"]  # Added to function signature & #[instruction]
-
-body = """
+**Body code** (injected before `Ok(())`):
+```rust
+// @wizard:inject.create_mint.body
     // Initialize transfer fee extension
     let _fee_config = transfer_fee::init_transfer_fee(fee_basis_points, max_fee)?;
-    msg!("Transfer fee initialized");"""      # Injected before `Ok(())`
+    msg!("Transfer fee initialized");
+// @wizard:end
+```
 
-accounts = """
-    /// The fee authority
-    pub fee_authority: Signer<'info>,"""      # Added to Accounts struct
+**Accounts** (added to Accounts struct):
+```rust
+// @wizard:inject.create_mint.accounts
+    /// The fee authority that can update and collect fees
+    pub fee_authority: Signer<'info>,
+// @wizard:end
 ```
 
 ## Injection Points
 
-The extraction script looks for specific patterns in base files to inject extension code:
+The assembly functions inject code at specific locations in base files:
 
 | Injection | Target File | Insertion Point |
 |-----------|-------------|-----------------|
@@ -136,11 +176,9 @@ The extraction script looks for specific patterns in base files to inject extens
 
 ## Directory Structure
 
-A complete program template should follow this structure:
-
 ```
 programs/<program-name>/
-├── template.toml           # This configuration file
+├── template.toml           # Metadata and config only
 ├── Cargo.toml              # Standard Anchor Cargo.toml
 ├── base/                   # Core files (always included)
 │   ├── lib.rs
@@ -150,9 +188,9 @@ programs/<program-name>/
 │   │   └── <instruction>.rs
 │   └── state/
 │       └── mod.rs
-└── extensions/             # Optional features
+└── extensions/             # Optional features with @wizard markers
     └── <extension-id>/
-        ├── mod.rs
+        ├── mod.rs          # Contains @wizard marker comments
         └── <additional>.rs
 ```
 
@@ -168,4 +206,6 @@ The extraction script validates:
 
 ## Example
 
-See `programs/token-mint/template.toml` for a complete working example.
+See `programs/token-mint/` for a complete working example:
+- `template.toml` - Program metadata and extension config
+- `extensions/transfer-fee/mod.rs` - Example with all marker types

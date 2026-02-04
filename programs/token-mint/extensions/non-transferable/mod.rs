@@ -1,5 +1,27 @@
 use anchor_lang::prelude::*;
 
+// =============================================================================
+// Wizard Injection Markers
+// =============================================================================
+
+// @wizard:inject.lib.modules
+pub mod non_transferable;
+// @wizard:end
+
+// @wizard:inject.create_mint.imports
+use crate::non_transferable;
+// @wizard:end
+
+// @wizard:inject.create_mint.body
+    // Initialize non-transferable (soulbound) extension
+    let _config = non_transferable::init_non_transferable()?;
+    msg!("Non-transferable extension initialized - tokens are soulbound");
+// @wizard:end
+
+// =============================================================================
+// Extension Implementation
+// =============================================================================
+
 /// Non-transferable (Soulbound) token extension.
 ///
 /// When enabled, tokens cannot be transferred between accounts after minting.

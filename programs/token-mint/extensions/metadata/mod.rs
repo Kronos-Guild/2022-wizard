@@ -1,6 +1,29 @@
 use anchor_lang::prelude::*;
 use spl_token_metadata_interface::state::TokenMetadata;
 
+// =============================================================================
+// Wizard Injection Markers
+// =============================================================================
+
+// @wizard:inject.lib.modules
+pub mod metadata;
+// @wizard:end
+
+// @wizard:inject.create_mint.imports
+use crate::metadata;
+// @wizard:end
+
+// @wizard:inject.create_mint.body
+    // Initialize metadata extension
+    metadata::validate_metadata(&name, &symbol)?;
+    let _metadata = metadata::init_metadata(name.clone(), symbol.clone(), uri.clone())?;
+    msg!("Metadata extension initialized");
+// @wizard:end
+
+// =============================================================================
+// Extension Implementation
+// =============================================================================
+
 /// Initialize metadata extension for the mint.
 ///
 /// This adds on-chain metadata (name, symbol, uri) to the token using

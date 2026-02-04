@@ -18,7 +18,7 @@ function ProgramOption({ title, icon, href, soon }: ProgramOptionProps) {
   const content = (
     <div
       className={cn(
-        "group flex items-center gap-3 rounded-xl border border-foreground/10 bg-background px-5 py-4 transition-all duration-200",
+        "group flex h-full items-center gap-3 rounded-xl border border-foreground/10 bg-background px-5 py-4 transition-all duration-200",
         soon
           ? "cursor-not-allowed opacity-50"
           : "hover:border-foreground/20 hover:shadow-md"
@@ -43,20 +43,20 @@ function ProgramOption({ title, icon, href, soon }: ProgramOptionProps) {
       </span>
 
       {soon ? (
-        <span className="rounded-full bg-foreground/5 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-foreground/40">
+        <span className="shrink-0 rounded-full bg-foreground/5 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-foreground/40">
           Soon
         </span>
       ) : (
-        <ArrowRight className="h-4 w-4 text-foreground/30 transition-all group-hover:translate-x-0.5 group-hover:text-brand" />
+        <ArrowRight className="h-4 w-4 shrink-0 text-foreground/30 transition-all group-hover:translate-x-0.5 group-hover:text-brand" />
       )}
     </div>
   );
 
   if (soon || !href) {
-    return content;
+    return <div className="h-full">{content}</div>;
   }
 
-  return <Link href={href}>{content}</Link>;
+  return <Link href={href} className="h-full">{content}</Link>;
 }
 
 const containerVariants = {
@@ -198,7 +198,7 @@ export function HomeContent() {
           Or choose a program type
         </motion.p>
 
-        <div className="mt-6 flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:justify-center">
+        <div className="mt-6 flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-center">
           <motion.div variants={programCardVariants} className="sm:flex-1 sm:max-w-[240px]">
             <ProgramOption
               title="Token Mint"

@@ -13,9 +13,65 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500", "600", "700"],
 });
 
+const siteUrl = "https://2022wizard.com";
+
 export const metadata: Metadata = {
-  title: "2022 Wizard",
-  description: "Generate secure, production-ready Anchor programs from audited building blocks",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "2022 Wizard - Token-2022 Anchor Program Generator",
+    template: "%s | 2022 Wizard",
+  },
+  description:
+    "Generate secure, production-ready Token-2022 Anchor programs from audited building blocks. Configure extensions, preview code, and export complete projects.",
+  keywords: [
+    "Token-2022",
+    "Solana",
+    "Anchor",
+    "Program Generator",
+    "SPL Token",
+    "Rust",
+    "Smart Contract",
+    "Token Extensions",
+    "Transfer Fee",
+    "Metadata",
+    "Kronos Guild",
+  ],
+  authors: [{ name: "Kronos Guild", url: "https://kronosguild.com" }],
+  creator: "Kronos Guild",
+  publisher: "Kronos Guild",
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "2022 Wizard",
+    title: "2022 Wizard - Token-2022 Anchor Program Generator",
+    description:
+      "Generate secure, production-ready Token-2022 Anchor programs from audited building blocks.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "2022 Wizard - Token-2022 Anchor Program Generator",
+    description:
+      "Generate secure, production-ready Token-2022 Anchor programs from audited building blocks.",
+    creator: "@KronosGuild",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon-16x16.png",
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({

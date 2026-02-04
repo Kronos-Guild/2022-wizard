@@ -1,0 +1,21 @@
+{
+  "name": "2022 Wizard",
+  "short_name": "2022 Wizard",
+  "description": "Generate secure, production-ready Token-2022 Anchor programs from audited building blocks",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#c44d3a",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

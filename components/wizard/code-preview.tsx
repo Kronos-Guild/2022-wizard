@@ -234,7 +234,7 @@ export function CodePreview({ state }: CodePreviewProps) {
       </div>
 
       {/* Code block with syntax highlighting */}
-      <div className="mt-4 flex-1 overflow-auto rounded-xl border border-foreground/10 bg-background/70 p-4">
+      <div className="mt-4 flex-1 overflow-auto rounded-xl border border-foreground/10 bg-background p-4">
         <pre className="text-[11px] leading-relaxed sm:text-xs">
           <code className="block w-max min-w-full">
             {activeFile && (

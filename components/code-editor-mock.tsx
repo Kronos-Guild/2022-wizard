@@ -1,24 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import dynamic from "next/dynamic"
-import type { HTMLMotionProps } from "framer-motion"
-
-// Dynamic import framer-motion to reduce initial bundle size
-const MotionDiv = dynamic(
-  () => import("framer-motion").then((mod) => mod.motion.div),
-  { ssr: false }
-) as React.ComponentType<HTMLMotionProps<"div">>
-
-const MotionSpan = dynamic(
-  () => import("framer-motion").then((mod) => mod.motion.span),
-  { ssr: false }
-) as React.ComponentType<HTMLMotionProps<"span">>
-
-const AnimatePresence = dynamic(
-  () => import("framer-motion").then((mod) => mod.AnimatePresence),
-  { ssr: false }
-) as React.ComponentType<React.ComponentProps<typeof import("framer-motion").AnimatePresence>>
+import { motion, AnimatePresence } from "framer-motion"
 
 // Regex patterns for syntax highlighting (extracted to avoid recreation on each render)
 const REGEX_WHITESPACE = /^(\s+)/
@@ -267,7 +250,7 @@ export function CodeEditorMock() {
           </div>
           <span className="ml-2 text-xs text-foreground/40 font-mono">lib.rs</span>
         </div>
-        <MotionSpan
+        <motion.span
           key={currentCode.label}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -275,7 +258,7 @@ export function CodeEditorMock() {
           className="text-xs font-medium text-foreground/50 px-2 py-0.5 rounded bg-foreground/5"
         >
           {currentCode.label}
-        </MotionSpan>
+        </motion.span>
       </div>
 
       {/* Code content */}
@@ -286,7 +269,7 @@ export function CodeEditorMock() {
               {currentCode.lines.map((line, index) => {
                 const isNew = !prevIds.has(line.id) || line.type.includes("-new")
                 return (
-                  <MotionDiv
+                  <motion.div
                     key={line.id}
                     layout
                     initial={{ opacity: 0, x: -10 }}
@@ -305,7 +288,7 @@ export function CodeEditorMock() {
                     className="leading-relaxed rounded"
                   >
                     {highlightLine(line.content, isNew)}
-                  </MotionDiv>
+                  </motion.div>
                 )
               })}
             </AnimatePresence>

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, type ChangeEvent } from "react";
+import { memo, useCallback, useRef, type ChangeEvent } from "react";
 import { Check } from "lucide-react";
 import type { WizardState } from "@/lib/wizard/types";
 import { cn } from "@/lib/utils";
@@ -46,6 +46,22 @@ export const SettingsPanel = memo(function SettingsPanel({
 }: SettingsPanelProps) {
   const isNonTransferableDisabled = state.extensions.transferFee;
   const isTransferFeeDisabled = state.extensions.nonTransferable;
+  const transferFeeConfigRef = useRef<HTMLDivElement>(null);
+
+  const handleTransferFeeToggle = useCallback(() => {
+    const newValue = !state.extensions.transferFee;
+    onTransferFeeChange(newValue);
+    
+    // Scroll to config section when enabling
+    if (newValue) {
+      setTimeout(() => {
+        transferFeeConfigRef.current?.scrollIntoView({ 
+          behavior: "smooth", 
+          block: "end" 
+        });
+      }, 250); // Wait for animation to start
+    }
+  }, [state.extensions.transferFee, onTransferFeeChange]);
 
   // Memoized handlers to avoid creating new functions on each render
   const handleNameChange = useCallback(
@@ -197,7 +213,7 @@ export const SettingsPanel = memo(function SettingsPanel({
                 ? "Non-transferable tokens cannot charge fees"
                 : undefined
             }
-            onToggle={() => onTransferFeeChange(!state.extensions.transferFee)}
+            onToggle={handleTransferFeeToggle}
           />
           {/* Coming Soon Extensions */}
           <ExtensionPill label="Freeze Authority" soon />
@@ -207,6 +223,7 @@ export const SettingsPanel = memo(function SettingsPanel({
 
         {/* Transfer Fee Config */}
         <div
+          ref={transferFeeConfigRef}
           className="grid transition-[grid-template-rows] duration-200 ease-out"
           style={{
             gridTemplateRows: state.extensions.transferFee ? "1fr" : "0fr",

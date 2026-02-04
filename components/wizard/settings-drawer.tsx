@@ -9,6 +9,7 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
+import { Settings2 } from "lucide-react";
 
 interface SettingsDrawerProps {
   children: React.ReactNode;
@@ -20,12 +21,14 @@ export function SettingsDrawer({ children }: SettingsDrawerProps) {
       <Drawer>
         <DrawerTrigger asChild>
           <Button
-            className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] shadow-lg"
+            className="fixed bottom-16 left-1/2 z-50 -translate-x-1/2 rounded-full px-6 py-3 text-xs font-semibold uppercase tracking-[0.15em] shadow-xl bg-brand text-brand-foreground hover:bg-brand/90"
+            size="lg"
           >
-            Open Settings
+            <Settings2 className="mr-2 h-4 w-4" />
+            Settings
           </Button>
         </DrawerTrigger>
-        <DrawerContent className="max-h-[90vh]">
+        <DrawerContent className="max-h-[85vh]">
           <DrawerHeader className="shrink-0 flex flex-row items-center justify-between border-b border-foreground/10 px-6 py-4">
             <DrawerTitle className="text-xs font-semibold uppercase tracking-[0.25em] text-foreground/60">
               Wizard Settings
@@ -36,7 +39,7 @@ export function SettingsDrawer({ children }: SettingsDrawerProps) {
               </Button>
             </DrawerClose>
           </DrawerHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-safe-area-inset-bottom">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-8">
             {children}
           </div>
         </DrawerContent>

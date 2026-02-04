@@ -31,7 +31,7 @@ interface SettingsPanelProps {
 const SECTION_LABEL =
   "text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-medium";
 
-export function SettingsPanel({
+export const SettingsPanel = memo(function SettingsPanel({
   state,
   onNameChange,
   onSymbolChange,
@@ -199,6 +199,10 @@ export function SettingsPanel({
             }
             onToggle={() => onTransferFeeChange(!state.extensions.transferFee)}
           />
+          {/* Coming Soon Extensions */}
+          <ExtensionPill label="Freeze Authority" soon />
+          <ExtensionPill label="Permanent Delegate" soon />
+          <ExtensionPill label="Interest Bearing" soon />
         </div>
 
         {/* Transfer Fee Config */}
@@ -244,13 +248,14 @@ export function SettingsPanel({
 
     </div>
   );
-}
+});
 
 interface ExtensionPillProps {
   label: string;
   active?: boolean;
   disabled?: boolean;
   hint?: string;
+  soon?: boolean;
   onToggle?: () => void;
 }
 
@@ -259,27 +264,36 @@ const ExtensionPill = memo(function ExtensionPill({
   active = false,
   disabled = false,
   hint,
+  soon = false,
   onToggle,
 }: ExtensionPillProps) {
+  const isTrulyDisabled = disabled || soon;
+
   const pill = (
     <Button
       type="button"
       variant={active ? "default" : "outline"}
       size="sm"
-      onClick={disabled ? undefined : onToggle}
-      disabled={disabled && !active}
+      onClick={isTrulyDisabled ? undefined : onToggle}
+      disabled={disabled && !active && !soon}
       className={cn(
         "h-8 rounded-full gap-1.5 transition-all",
         active && "bg-brand text-brand-foreground hover:bg-brand/90",
-        disabled && !active && "opacity-50"
+        soon && "!opacity-50 !cursor-not-allowed !pointer-events-auto",
+        disabled && !active && !soon && "opacity-50"
       )}
     >
       {active && <Check className="size-3" />}
       <span>{label}</span>
+      {soon && (
+        <span className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-foreground/50">
+          Soon
+        </span>
+      )}
     </Button>
   );
 
-  if (hint && disabled) {
+  if (hint && disabled && !soon) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>{pill}</TooltipTrigger>

@@ -1,7 +1,35 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useEffect, useState, useRef } from "react"
+import dynamic from "next/dynamic"
+import type { HTMLMotionProps } from "framer-motion"
+
+// Dynamic import framer-motion to reduce initial bundle size
+const MotionDiv = dynamic(
+  () => import("framer-motion").then((mod) => mod.motion.div),
+  { ssr: false }
+) as React.ComponentType<HTMLMotionProps<"div">>
+
+const MotionSpan = dynamic(
+  () => import("framer-motion").then((mod) => mod.motion.span),
+  { ssr: false }
+) as React.ComponentType<HTMLMotionProps<"span">>
+
+const AnimatePresence = dynamic(
+  () => import("framer-motion").then((mod) => mod.AnimatePresence),
+  { ssr: false }
+) as React.ComponentType<React.ComponentProps<typeof import("framer-motion").AnimatePresence>>
+
+// Regex patterns for syntax highlighting (extracted to avoid recreation on each render)
+const REGEX_WHITESPACE = /^(\s+)/
+const REGEX_COMMENT = /^\/\/.*/
+const REGEX_STRING = /^"[^"]*"/
+const REGEX_MACRO = /^[a-z_]+!/
+const REGEX_ATTRIBUTE = /^#\[[^\]]+\]/
+const REGEX_KEYWORD = /^(use|pub|mod|fn|struct|let|mut|const|impl|for|if|else|return|self|super)\b/
+const REGEX_TYPE = /^(Context|Result|String|Signer|Program|System|Token2022|UncheckedAccount|Accounts|InitializeMint|Ok)\b/
+const REGEX_PRIMITIVE = /^(u8|u16|u32|u64|u128|i8|i16|i32|i64|i128|bool|str)\b/
+const REGEX_FUNCTION_CALL = /^[a-z_]+(?=\()/
 
 // Code states representing wizard progression
 const CODE_STATES = [
@@ -96,106 +124,106 @@ function highlightLine(content: string, isNew: boolean): React.ReactNode {
 
   while (remaining.length > 0) {
     // Leading whitespace
-    if (remaining.match(/^(\s+)/)) {
-      const match = remaining.match(/^(\s+)/)!
-      tokens.push(<span key={key++}>{match[0]}</span>)
-      remaining = remaining.slice(match[0].length)
+    const wsMatch = remaining.match(REGEX_WHITESPACE)
+    if (wsMatch) {
+      tokens.push(<span key={key++}>{wsMatch[0]}</span>)
+      remaining = remaining.slice(wsMatch[0].length)
       continue
     }
 
     // Comments
-    if (remaining.match(/^\/\/.*/)) {
-      const match = remaining.match(/^\/\/.*/)!
+    const commentMatch = remaining.match(REGEX_COMMENT)
+    if (commentMatch) {
       tokens.push(
         <span key={key++} className="text-foreground/40 italic">
-          {match[0]}
+          {commentMatch[0]}
         </span>
       )
-      remaining = remaining.slice(match[0].length)
+      remaining = remaining.slice(commentMatch[0].length)
       continue
     }
 
     // Strings
-    if (remaining.match(/^"[^"]*"/)) {
-      const match = remaining.match(/^"[^"]*"/)!
+    const stringMatch = remaining.match(REGEX_STRING)
+    if (stringMatch) {
       tokens.push(
         <span key={key++} className="text-emerald-600 dark:text-emerald-400">
-          {match[0]}
+          {stringMatch[0]}
         </span>
       )
-      remaining = remaining.slice(match[0].length)
+      remaining = remaining.slice(stringMatch[0].length)
       continue
     }
 
     // Macros
-    if (remaining.match(/^[a-z_]+!/)) {
-      const match = remaining.match(/^[a-z_]+!/)!
+    const macroMatch = remaining.match(REGEX_MACRO)
+    if (macroMatch) {
       tokens.push(
         <span key={key++} className="text-purple-600 dark:text-purple-400">
-          {match[0]}
+          {macroMatch[0]}
         </span>
       )
-      remaining = remaining.slice(match[0].length)
+      remaining = remaining.slice(macroMatch[0].length)
       continue
     }
 
     // Attributes
-    if (remaining.match(/^#\[[^\]]+\]/)) {
-      const match = remaining.match(/^#\[[^\]]+\]/)!
+    const attrMatch = remaining.match(REGEX_ATTRIBUTE)
+    if (attrMatch) {
       tokens.push(
         <span key={key++} className="text-amber-600 dark:text-amber-400">
-          {match[0]}
+          {attrMatch[0]}
         </span>
       )
-      remaining = remaining.slice(match[0].length)
+      remaining = remaining.slice(attrMatch[0].length)
       continue
     }
 
     // Keywords
-    if (remaining.match(/^(use|pub|mod|fn|struct|let|mut|const|impl|for|if|else|return|self|super)\b/)) {
-      const match = remaining.match(/^(use|pub|mod|fn|struct|let|mut|const|impl|for|if|else|return|self|super)\b/)!
+    const kwMatch = remaining.match(REGEX_KEYWORD)
+    if (kwMatch) {
       tokens.push(
         <span key={key++} className="text-rose-600 dark:text-rose-400">
-          {match[0]}
+          {kwMatch[0]}
         </span>
       )
-      remaining = remaining.slice(match[0].length)
+      remaining = remaining.slice(kwMatch[0].length)
       continue
     }
 
     // Types
-    if (remaining.match(/^(Context|Result|String|Signer|Program|System|Token2022|UncheckedAccount|Accounts|InitializeMint|Ok)\b/)) {
-      const match = remaining.match(/^(Context|Result|String|Signer|Program|System|Token2022|UncheckedAccount|Accounts|InitializeMint|Ok)\b/)!
+    const typeMatch = remaining.match(REGEX_TYPE)
+    if (typeMatch) {
       tokens.push(
         <span key={key++} className="text-sky-600 dark:text-sky-400">
-          {match[0]}
+          {typeMatch[0]}
         </span>
       )
-      remaining = remaining.slice(match[0].length)
+      remaining = remaining.slice(typeMatch[0].length)
       continue
     }
 
     // Primitives
-    if (remaining.match(/^(u8|u16|u32|u64|u128|i8|i16|i32|i64|i128|bool|str)\b/)) {
-      const match = remaining.match(/^(u8|u16|u32|u64|u128|i8|i16|i32|i64|i128|bool|str)\b/)!
+    const primMatch = remaining.match(REGEX_PRIMITIVE)
+    if (primMatch) {
       tokens.push(
         <span key={key++} className="text-orange-600 dark:text-orange-400">
-          {match[0]}
+          {primMatch[0]}
         </span>
       )
-      remaining = remaining.slice(match[0].length)
+      remaining = remaining.slice(primMatch[0].length)
       continue
     }
 
     // Function calls
-    if (remaining.match(/^[a-z_]+(?=\()/)) {
-      const match = remaining.match(/^[a-z_]+(?=\()/)!
+    const funcMatch = remaining.match(REGEX_FUNCTION_CALL)
+    if (funcMatch) {
       tokens.push(
         <span key={key++} className="text-violet-600 dark:text-violet-400">
-          {match[0]}
+          {funcMatch[0]}
         </span>
       )
-      remaining = remaining.slice(match[0].length)
+      remaining = remaining.slice(funcMatch[0].length)
       continue
     }
 
@@ -213,18 +241,19 @@ function highlightLine(content: string, isNew: boolean): React.ReactNode {
 
 export function CodeEditorMock() {
   const [currentState, setCurrentState] = useState(0)
-  const [prevState, setPrevState] = useState(0)
+  // Use ref to track previous state to avoid re-renders and stale closures
+  const prevStateRef = useRef(0)
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setPrevState(currentState)
+      prevStateRef.current = currentState
       setCurrentState((prev) => (prev + 1) % CODE_STATES.length)
     }, 4000)
     return () => clearInterval(interval)
   }, [currentState])
 
   const currentCode = CODE_STATES[currentState]
-  const prevIds = new Set(CODE_STATES[prevState].lines.map((l) => l.id))
+  const prevIds = new Set(CODE_STATES[prevStateRef.current].lines.map((l) => l.id))
 
   return (
     <div className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.02] dark:bg-foreground/[0.03] overflow-hidden shadow-sm">
@@ -238,7 +267,7 @@ export function CodeEditorMock() {
           </div>
           <span className="ml-2 text-xs text-foreground/40 font-mono">lib.rs</span>
         </div>
-        <motion.span
+        <MotionSpan
           key={currentCode.label}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -246,7 +275,7 @@ export function CodeEditorMock() {
           className="text-xs font-medium text-foreground/50 px-2 py-0.5 rounded bg-foreground/5"
         >
           {currentCode.label}
-        </motion.span>
+        </MotionSpan>
       </div>
 
       {/* Code content */}
@@ -257,7 +286,7 @@ export function CodeEditorMock() {
               {currentCode.lines.map((line, index) => {
                 const isNew = !prevIds.has(line.id) || line.type.includes("-new")
                 return (
-                  <motion.div
+                  <MotionDiv
                     key={line.id}
                     layout
                     initial={{ opacity: 0, x: -10 }}
@@ -276,7 +305,7 @@ export function CodeEditorMock() {
                     className="leading-relaxed rounded"
                   >
                     {highlightLine(line.content, isNew)}
-                  </motion.div>
+                  </MotionDiv>
                 )
               })}
             </AnimatePresence>
@@ -290,7 +319,7 @@ export function CodeEditorMock() {
           <button
             key={state.label}
             onClick={() => {
-              setPrevState(currentState)
+              prevStateRef.current = currentState
               setCurrentState(index)
             }}
             className={`h-1.5 rounded-full transition-all duration-300 ${

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { IBM_Plex_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -11,6 +12,29 @@ const ibmPlexMono = IBM_Plex_Mono({
   variable: "--font-ibm-plex-mono",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+});
+
+// Local Clash Display font for better performance (no external request)
+const clashDisplay = localFont({
+  src: [
+    {
+      path: "../public/fonts/clash-display-500.woff2",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/clash-display-600.woff2",
+      weight: "600",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/clash-display-700.woff2",
+      weight: "700",
+      style: "normal",
+    },
+  ],
+  variable: "--font-clash",
+  display: "swap",
 });
 
 const siteUrl = "https://2022wizard.com";
@@ -81,14 +105,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link
-          href="https://api.fontshare.com/v2/css?f[]=clash-display@200,300,400,500,600,700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
       <body
-        className={`${ibmPlexMono.variable} relative antialiased min-h-screen flex flex-col`}
+        className={`${ibmPlexMono.variable} ${clashDisplay.variable} relative antialiased min-h-screen flex flex-col`}
       >
         <NuqsAdapter>
           <ThemeProvider>

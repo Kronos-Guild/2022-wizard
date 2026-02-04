@@ -38,7 +38,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
               fill="none"
               stroke={strokeColor}
               strokeWidth="0.5"
-              strokeOpacity="0.08"
+              strokeOpacity="0.12"
             />
           </pattern>
 
@@ -54,7 +54,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
               fill="none"
               stroke={strokeColor}
               strokeWidth="1"
-              strokeOpacity="0.15"
+              strokeOpacity="0.2"
             />
           </pattern>
 
@@ -71,7 +71,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
               y2="200"
               stroke={strokeColor}
               strokeWidth="0.75"
-              strokeOpacity="0.06"
+              strokeOpacity="0.1"
               strokeDasharray="15,30"
             />
             <line
@@ -81,7 +81,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
               y2="200"
               stroke={strokeColor}
               strokeWidth="0.75"
-              strokeOpacity="0.06"
+              strokeOpacity="0.1"
               strokeDasharray="15,30"
             />
           </pattern>
@@ -173,9 +173,9 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
 
         </svg>
 
-      {/* Dark mode grid - lower opacity */}
+      {/* Dark mode grid */}
       <svg
-        className="absolute inset-0 w-full h-full opacity-0 dark:opacity-60 transition-opacity"
+        className="absolute inset-0 w-full h-full opacity-0 dark:opacity-100 transition-opacity"
         xmlns="http://www.w3.org/2000/svg"
         width="100%"
         height="100%"
@@ -199,7 +199,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
               fill="none"
               stroke={strokeColor}
               strokeWidth="0.5"
-              strokeOpacity="0.04"
+              strokeOpacity="0.08"
             />
           </pattern>
 
@@ -215,7 +215,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
               fill="none"
               stroke={strokeColor}
               strokeWidth="1"
-              strokeOpacity="0.08"
+              strokeOpacity="0.15"
             />
           </pattern>
 
@@ -232,7 +232,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
               y2="200"
               stroke={strokeColor}
               strokeWidth="0.75"
-              strokeOpacity="0.03"
+              strokeOpacity="0.06"
               strokeDasharray="15,30"
             />
             <line
@@ -242,7 +242,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
               y2="200"
               stroke={strokeColor}
               strokeWidth="0.75"
-              strokeOpacity="0.03"
+              strokeOpacity="0.06"
               strokeDasharray="15,30"
             />
           </pattern>
@@ -267,7 +267,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
           fill="none"
           stroke={strokeColor}
           strokeWidth="1.5"
-          strokeOpacity="0.15"
+          strokeOpacity="0.2"
         />
 
         {Array.from({ length: 20 }).map((_, i) => (
@@ -279,13 +279,13 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
               y2="10"
               stroke={strokeColor}
               strokeWidth="1"
-              strokeOpacity="0.1"
+              strokeOpacity="0.15"
             />
             <text
               x={100 + i * 100}
               y="24"
               fill={strokeColor}
-              fillOpacity="0.08"
+              fillOpacity="0.12"
               fontSize="10"
               fontFamily="ui-monospace, monospace"
               textAnchor="middle"
@@ -304,13 +304,13 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
               y2={100 + i * 100}
               stroke={strokeColor}
               strokeWidth="1"
-              strokeOpacity="0.1"
+              strokeOpacity="0.15"
             />
             <text
               x="14"
               y={104 + i * 100}
               fill={strokeColor}
-              fillOpacity="0.08"
+              fillOpacity="0.12"
               fontSize="10"
               fontFamily="ui-monospace, monospace"
               textAnchor="start"
@@ -324,7 +324,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
           x="36"
           y="36"
           fill={strokeColor}
-          fillOpacity="0.06"
+          fillOpacity="0.1"
           fontSize="10"
           fontFamily="ui-sans-serif, sans-serif"
           fontWeight="500"

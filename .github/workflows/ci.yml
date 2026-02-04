@@ -35,6 +35,9 @@ jobs:
       - name: Extract templates
         run: pnpm --filter @2022-wizard/scripts extract-templates
 
+      - name: Run tests
+        run: pnpm --filter @2022-wizard/scripts test
+
       - name: Check for uncommitted generated files
         run: |
           if [[ -n $(git status --porcelain apps/web/lib/codegen/generated/) ]]; then

@@ -15,6 +15,13 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as toml from "toml";
+import {
+  parseMarkerComments,
+  groupInjections,
+  type ExtensionInjections,
+  type LibInjection,
+  type InstructionInjection,
+} from "./lib/marker-parser";
 
 const PROGRAMS_DIR = path.join(process.cwd(), "..", "programs");
 const OUTPUT_DIR = path.join(
@@ -242,8 +249,9 @@ function validateTemplate(
 }
 
 // =============================================================================
-// Types for the new template.toml format
+// Types for the template.toml format
 // =============================================================================
+// Note: LibInjection, InstructionInjection, ExtensionInjections are imported from marker-parser
 
 interface ConfigField {
   type: string;
@@ -252,23 +260,6 @@ interface ConfigField {
   default?: number | string | boolean;
   min?: number;
   max?: number;
-}
-
-interface LibInjection {
-  modules?: string;
-  instructions?: string;
-}
-
-interface InstructionInjection {
-  imports?: string;
-  args?: string[];
-  body?: string;
-  accounts?: string;
-}
-
-interface ExtensionInjections {
-  lib?: LibInjection;
-  [instructionId: string]: LibInjection | InstructionInjection | undefined;
 }
 
 interface Extension {
@@ -322,85 +313,7 @@ function escapeForTemplate(content: string): string {
   return content.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
 }
 
-// =============================================================================
-// Marker Comment Parsing
-// =============================================================================
-// 
-// Marker syntax in Rust files:
-//   // @wizard:inject.<target>.<type>
-//   ... code to inject ...
-//   // @wizard:end
-//
-// Where:
-//   - target: "lib" or instruction id (e.g., "create_mint")  
-//   - type: "modules", "instructions", "imports", "args", "body", "accounts"
-//
-// Example:
-//   // @wizard:inject.create_mint.body
-//   let _fee_config = transfer_fee::init_transfer_fee(fee_basis_points, max_fee)?;
-//   msg!("Transfer fee initialized");
-//   // @wizard:end
-//
-// For args, use comma-separated on single line:
-//   // @wizard:inject.create_mint.args fee_basis_points: u16, max_fee: u64
-//
-
-interface ParsedInjection {
-  target: string;  // "lib" or instruction id
-  type: string;    // "modules", "instructions", "imports", "args", "body", "accounts"
-  content: string;
-}
-
-function parseMarkerComments(fileContent: string): ParsedInjection[] {
-  const injections: ParsedInjection[] = [];
-  const lines = fileContent.split("\n");
-  
-  let currentInjection: { target: string; type: string; lines: string[] } | null = null;
-  
-  for (const line of lines) {
-    // Check for args (single line format)
-    const argsMatch = line.match(/\/\/\s*@wizard:inject\.(\w+)\.args\s+(.+)$/);
-    if (argsMatch) {
-      injections.push({
-        target: argsMatch[1],
-        type: "args",
-        content: argsMatch[2].trim(),
-      });
-      continue;
-    }
-    
-    // Check for block start
-    const startMatch = line.match(/\/\/\s*@wizard:inject\.(\w+)\.(\w+)\s*$/);
-    if (startMatch) {
-      currentInjection = {
-        target: startMatch[1],
-        type: startMatch[2],
-        lines: [],
-      };
-      continue;
-    }
-    
-    // Check for block end
-    if (line.match(/\/\/\s*@wizard:end\s*$/)) {
-      if (currentInjection) {
-        injections.push({
-          target: currentInjection.target,
-          type: currentInjection.type,
-          content: currentInjection.lines.join("\n"),
-        });
-        currentInjection = null;
-      }
-      continue;
-    }
-    
-    // Collect lines inside a block
-    if (currentInjection) {
-      currentInjection.lines.push(line);
-    }
-  }
-  
-  return injections;
-}
+// Marker comment parsing is now in ./lib/marker-parser.ts
 
 /**
  * Extract injections from all extension files and merge with template.toml config.
@@ -410,45 +323,20 @@ function extractInjectionsFromFiles(
   programDir: string,
   ext: Extension
 ): ExtensionInjections {
-  const injections: ExtensionInjections = {};
-  
   // Parse all extension files for marker comments
-  for (const file of ext.files) {
+  const allParsed = ext.files.flatMap((file) => {
     const content = readRustFile(programDir, file);
-    const parsed = parseMarkerComments(content);
-    
-    for (const injection of parsed) {
-      const { target, type, content: code } = injection;
-      
-      if (target === "lib") {
-        if (!injections.lib) {
-          injections.lib = {};
-        }
-        if (type === "modules" || type === "instructions") {
-          injections.lib[type] = code;
-        }
-      } else {
-        // Instruction target
-        if (!injections[target]) {
-          injections[target] = {};
-        }
-        const instrInj = injections[target] as InstructionInjection;
-        
-        if (type === "args") {
-          // Parse args: "fee_basis_points: u16, max_fee: u64" -> ["fee_basis_points: u16", "max_fee: u64"]
-          instrInj.args = code.split(",").map(a => a.trim()).filter(a => a.length > 0);
-        } else if (type === "imports" || type === "body" || type === "accounts") {
-          instrInj[type] = code;
-        }
-      }
-    }
-  }
-  
+    return parseMarkerComments(content);
+  });
+
+  // Group the parsed injections
+  const injections = groupInjections(allParsed);
+
   // Fall back to template.toml inject sections if no markers found
   if (ext.inject) {
     for (const [target, tomlInj] of Object.entries(ext.inject)) {
       if (!tomlInj) continue;
-      
+
       if (target === "lib") {
         if (!injections.lib) {
           injections.lib = tomlInj as LibInjection;
@@ -469,15 +357,19 @@ function extractInjectionsFromFiles(
           // Merge: marker comments take precedence
           const instrInj = injections[target] as InstructionInjection;
           const tomlInstrInj = tomlInj as InstructionInjection;
-          if (!instrInj.imports && tomlInstrInj.imports) instrInj.imports = tomlInstrInj.imports;
-          if (!instrInj.args && tomlInstrInj.args) instrInj.args = tomlInstrInj.args;
-          if (!instrInj.body && tomlInstrInj.body) instrInj.body = tomlInstrInj.body;
-          if (!instrInj.accounts && tomlInstrInj.accounts) instrInj.accounts = tomlInstrInj.accounts;
+          if (!instrInj.imports && tomlInstrInj.imports)
+            instrInj.imports = tomlInstrInj.imports;
+          if (!instrInj.args && tomlInstrInj.args)
+            instrInj.args = tomlInstrInj.args;
+          if (!instrInj.body && tomlInstrInj.body)
+            instrInj.body = tomlInstrInj.body;
+          if (!instrInj.accounts && tomlInstrInj.accounts)
+            instrInj.accounts = tomlInstrInj.accounts;
         }
       }
     }
   }
-  
+
   return injections;
 }
 

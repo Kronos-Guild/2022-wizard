@@ -1,0 +1,43 @@
+/* [project]/apps/web/app/clashdisplay_bf6326ed.module.css [app-client] (css) */
+@font-face {
+  font-family: clashDisplay;
+  src: url("../media/clash_display_500-s.p.bce5a8f2.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: clashDisplay;
+  src: url("../media/clash_display_600-s.p.f188b517.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: clashDisplay;
+  src: url("../media/clash_display_700-s.p.9137c724.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: clashDisplay Fallback;
+  src: local(Arial);
+  ascent-override: 81.56%;
+  descent-override: 22.91%;
+  line-gap-override: 8.25%;
+  size-adjust: 109.12%;
+}
+
+.clashdisplay_bf6326ed-module__5fopva__className {
+  font-family: clashDisplay, clashDisplay Fallback;
+}
+
+.clashdisplay_bf6326ed-module__5fopva__variable {
+  --font-clash: "clashDisplay", "clashDisplay Fallback";
+}
+
+/*# sourceMappingURL=apps_web_app_clashdisplay_bf6326ed_module_css_bad6b30c._.single.css.map*/

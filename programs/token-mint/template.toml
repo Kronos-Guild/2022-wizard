@@ -1,0 +1,77 @@
+# Token Mint Program Template Configuration
+# 
+# This file defines how the wizard assembles the program from base and extension files.
+# Rust contributors: Edit the .rs files, update this config if adding new extensions.
+
+[program]
+id = "token-mint"
+name = "Token Mint"
+description = "Create Token-2022 mints with optional extensions like metadata, transfer fees, and more."
+version = "0.1.0"
+
+# Base files are always included
+[base]
+files = [
+    "base/lib.rs",
+    "base/instructions/mod.rs",
+    "base/instructions/create_mint.rs",
+    "base/state/mod.rs",
+    "base/error.rs",
+]
+
+# Config files that get generated (not Rust)
+[config]
+files = [
+    { template = "Anchor.toml", output = "Anchor.toml" },
+    { template = "Cargo.toml", output = "Cargo.toml" },
+]
+
+# Extensions - each can be toggled on/off in the wizard
+[extensions.metadata]
+id = "metadata"
+name = "Metadata"
+description = "Store token name, symbol, and URI on-chain using Token-2022 metadata extension"
+default = true
+locked = true  # Cannot be disabled - always included
+files = [
+    "extensions/metadata/mod.rs",
+]
+
+[extensions.transfer-fee]
+id = "transfer-fee"
+name = "Transfer Fee"
+description = "Charge a percentage fee on every token transfer"
+default = false
+conflicts_with = ["non-transferable"]
+files = [
+    "extensions/transfer-fee/mod.rs",
+    "extensions/transfer-fee/update_fee.rs",
+]
+# UI configuration for this extension
+[extensions.transfer-fee.config]
+fee_bps = { type = "number", name = "Fee (Basis Points)", description = "100 = 1%", default = 100, min = 0, max = 10000 }
+max_fee = { type = "number", name = "Max Fee", description = "Maximum fee in token units", default = 1000000, min = 0 }
+
+[extensions.close-mint]
+id = "close-mint"
+name = "Close Mint"
+description = "Allow the mint authority to close the mint and reclaim rent"
+default = false
+files = [
+    "extensions/close-mint/mod.rs",
+]
+
+[extensions.non-transferable]
+id = "non-transferable"
+name = "Non-Transferable"
+description = "Make tokens soulbound - they cannot be transferred after minting"
+default = false
+conflicts_with = ["transfer-fee"]
+files = [
+    "extensions/non-transferable/mod.rs",
+]
+
+# Future extensions (not yet implemented)
+# [extensions.freeze-authority]
+# [extensions.permanent-delegate]
+# [extensions.interest-bearing]

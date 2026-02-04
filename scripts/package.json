@@ -1,0 +1,17 @@
+{
+  "name": "@2022-wizard/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "extract-templates": "tsx extract-templates.ts"
+  },
+  "dependencies": {
+    "toml": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

@@ -1,4 +1,6 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
+use spl_token_2022::extension::{non_transferable::instruction as non_transferable_instruction, ExtensionType};
 
 // =============================================================================
 // Wizard Injection Markers
@@ -10,12 +12,23 @@ pub mod non_transferable;
 
 // @wizard:inject.create_mint.imports
 use crate::non_transferable;
+use spl_token_2022::extension::non_transferable::instruction as non_transferable_ix;
 // @wizard:end
 
-// @wizard:inject.create_mint.body
-    // Initialize non-transferable (soulbound) extension
-    let _config = non_transferable::init_non_transferable()?;
-    msg!("Non-transferable extension initialized - tokens are soulbound");
+// @wizard:inject.create_mint.extension_types
+    extension_types.push(ExtensionType::NonTransferable);
+// @wizard:end
+
+// @wizard:inject.create_mint.init_extensions
+    // Initialize NonTransferable extension (soulbound tokens)
+    invoke(
+        &non_transferable_ix::initialize_non_transferable_mint(
+            token_program.key,
+            mint.key,
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("NonTransferable initialized - tokens are soulbound");
 // @wizard:end
 
 // =============================================================================
@@ -34,39 +47,6 @@ use crate::non_transferable;
 ///
 /// Note: This extension is mutually exclusive with transfer-fee
 /// (fees don't make sense if transfers are impossible).
-
-/// Marker struct for non-transferable tokens.
-///
-/// This extension has no configuration - it's simply enabled or not.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
-pub struct NonTransferableConfig {
-    /// Timestamp when the extension was initialized
-    pub initialized_at: i64,
-}
-
-impl NonTransferableConfig {
-    pub fn new() -> Self {
-        Self {
-            initialized_at: Clock::get().map(|c| c.unix_timestamp).unwrap_or(0),
-        }
-    }
-}
-
-impl Default for NonTransferableConfig {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Initialize non-transferable extension on the mint.
-///
-/// Once initialized, all tokens minted will be non-transferable.
-pub fn init_non_transferable() -> Result<NonTransferableConfig> {
-    msg!("Initializing non-transferable (soulbound) extension");
-    msg!("  Tokens minted from this mint cannot be transferred");
-
-    Ok(NonTransferableConfig::new())
-}
 
 #[error_code]
 pub enum NonTransferableError {

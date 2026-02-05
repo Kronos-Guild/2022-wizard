@@ -1,5 +1,10 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
+use spl_token_2022::{
+    extension::{mint_close_authority::instruction as close_authority_instruction, ExtensionType},
+    instruction as token_instruction,
+};
 
 // =============================================================================
 // Wizard Injection Markers
@@ -20,11 +25,24 @@ pub mod close_mint;
 
 // @wizard:inject.create_mint.imports
 use crate::close_mint;
+use spl_token_2022::extension::mint_close_authority::instruction as close_authority_ix;
 // @wizard:end
 
-// @wizard:inject.create_mint.body
-    // Close mint extension enabled - mint can be closed when supply is 0
-    msg!("Close mint extension enabled");
+// @wizard:inject.create_mint.extension_types
+    extension_types.push(ExtensionType::MintCloseAuthority);
+// @wizard:end
+
+// @wizard:inject.create_mint.init_extensions
+    // Initialize MintCloseAuthority extension
+    invoke(
+        &close_authority_ix::initialize_mint_close_authority(
+            token_program.key,
+            mint.key,
+            Some(&ctx.accounts.close_authority.key()),
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("MintCloseAuthority initialized: {}", ctx.accounts.close_authority.key());
 // @wizard:end
 
 // @wizard:inject.create_mint.accounts
@@ -36,28 +54,36 @@ use crate::close_mint;
 // Extension Implementation
 // =============================================================================
 
-/// Close mint extension allows the mint authority to close the mint
-/// account and reclaim the rent.
-///
-/// This is useful for:
-/// - One-time token distributions where the mint is no longer needed
-/// - Reclaiming SOL from unused mints
-/// - Cleaning up test mints
+/// Close mint extension allows closing the mint account to reclaim rent.
 ///
 /// WARNING: Once closed, the mint cannot be recreated with the same address.
 
-/// Closes the mint account and returns rent to the payer.
+/// Closes the mint account and returns rent to the destination.
 ///
 /// Requirements:
 /// - Total supply must be 0 (all tokens burned)
 /// - Caller must be the close authority
 pub fn handler(ctx: Context<CloseMint>) -> Result<()> {
-    msg!("Closing mint account");
-    msg!("  Rent returned to: {}", ctx.accounts.destination.key());
+    msg!("Closing mint account: {}", ctx.accounts.mint.key());
+    msg!("Rent returned to: {}", ctx.accounts.destination.key());
 
     // Close mint via CPI to Token-2022 program
-    // Implementation would go here
+    invoke(
+        &token_instruction::close_account(
+            ctx.accounts.token_program.key,
+            ctx.accounts.mint.key,
+            ctx.accounts.destination.key,
+            ctx.accounts.close_authority.key,
+            &[],  // No multisig signers
+        )?,
+        &[
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.destination.to_account_info(),
+            ctx.accounts.close_authority.to_account_info(),
+        ],
+    )?;
 
+    msg!("Mint closed successfully");
     Ok(())
 }
 

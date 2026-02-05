@@ -1,9 +1,13 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
+use anchor_spl::token_2022::Token2022;
+use spl_token_2022::extension::{transfer_fee::instruction as transfer_fee_instruction, ExtensionType};
+
+pub mod update_fee;
 
 // =============================================================================
 // Wizard Injection Markers
 // =============================================================================
-// These comments tell the wizard what code to inject into base files.
 
 // @wizard:inject.lib.modules
 pub mod transfer_fee;
@@ -11,18 +15,34 @@ pub mod transfer_fee;
 
 // @wizard:inject.create_mint.imports
 use crate::transfer_fee;
+use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_ix;
 // @wizard:end
 
 // @wizard:inject.create_mint.args fee_basis_points: u16, max_fee: u64
 
-// @wizard:inject.create_mint.body
-    // Initialize transfer fee extension
-    let _fee_config = transfer_fee::init_transfer_fee(fee_basis_points, max_fee)?;
-    msg!("Transfer fee extension initialized: {} bps, max {}", fee_basis_points, max_fee);
+// @wizard:inject.create_mint.extension_types
+    extension_types.push(ExtensionType::TransferFeeConfig);
+// @wizard:end
+
+// @wizard:inject.create_mint.init_extensions
+    // Initialize TransferFeeConfig extension
+    transfer_fee::validate_fee_config(fee_basis_points, max_fee)?;
+    invoke(
+        &transfer_fee_ix::initialize_transfer_fee_config(
+            token_program.key,
+            mint.key,
+            Some(&ctx.accounts.fee_authority.key()),  // transfer_fee_config_authority
+            Some(&ctx.accounts.fee_authority.key()),  // withdraw_withheld_authority
+            fee_basis_points,
+            max_fee,
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("TransferFeeConfig initialized: {} bps, max {}", fee_basis_points, max_fee);
 // @wizard:end
 
 // @wizard:inject.create_mint.accounts
-    /// The fee authority that can update and collect fees
+    /// The fee authority that can update fees and withdraw withheld amounts
     pub fee_authority: Signer<'info>,
 // @wizard:end
 
@@ -33,33 +53,27 @@ use crate::transfer_fee;
 /// Maximum allowed transfer fee in basis points (100% = 10000 bps)
 pub const MAX_FEE_BASIS_POINTS: u16 = 10000;
 
-/// Configuration for the transfer fee extension.
-///
-/// Transfer fees are charged on every token transfer and collected
-/// in a withheld account that can be harvested by the fee authority.
+/// Validates transfer fee configuration
+pub fn validate_fee_config(fee_basis_points: u16, max_fee: u64) -> Result<()> {
+    require!(
+        fee_basis_points <= MAX_FEE_BASIS_POINTS,
+        TransferFeeError::FeeTooHigh
+    );
+    msg!("Transfer fee config validated: {} bps, max {} tokens", fee_basis_points, max_fee);
+    Ok(())
+}
+
+/// Configuration for the transfer fee extension (for reference/calculation)
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub struct TransferFeeConfig {
-    /// Fee in basis points (1 bp = 0.01%)
-    /// Example: 100 = 1% fee
     pub fee_basis_points: u16,
-
-    /// Maximum fee in token units (with decimals)
-    /// This caps the fee for large transfers
     pub max_fee: u64,
 }
 
 impl TransferFeeConfig {
-    /// Creates a new transfer fee configuration
     pub fn new(fee_basis_points: u16, max_fee: u64) -> Result<Self> {
-        require!(
-            fee_basis_points <= MAX_FEE_BASIS_POINTS,
-            TransferFeeError::FeeTooHigh
-        );
-
-        Ok(Self {
-            fee_basis_points,
-            max_fee,
-        })
+        require!(fee_basis_points <= MAX_FEE_BASIS_POINTS, TransferFeeError::FeeTooHigh);
+        Ok(Self { fee_basis_points, max_fee })
     }
 
     /// Calculates the fee for a given transfer amount
@@ -69,22 +83,8 @@ impl TransferFeeConfig {
             .unwrap_or(0)
             .checked_div(10000)
             .unwrap_or(0) as u64;
-
         std::cmp::min(fee, self.max_fee)
     }
-}
-
-/// Initialize transfer fee extension on the mint
-pub fn init_transfer_fee(fee_basis_points: u16, max_fee: u64) -> Result<TransferFeeConfig> {
-    msg!("Initializing transfer fee extension");
-    msg!(
-        "  Fee: {} basis points ({}%)",
-        fee_basis_points,
-        fee_basis_points as f64 / 100.0
-    );
-    msg!("  Max fee: {} tokens", max_fee);
-
-    TransferFeeConfig::new(fee_basis_points, max_fee)
 }
 
 #[error_code]

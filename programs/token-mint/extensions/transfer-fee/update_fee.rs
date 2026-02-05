@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
+use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_instruction;
 
-use super::{TransferFeeConfig, TransferFeeError, MAX_FEE_BASIS_POINTS};
+use super::{TransferFeeError, MAX_FEE_BASIS_POINTS};
 
 // =============================================================================
 // Wizard Injection Markers
@@ -34,17 +36,25 @@ pub fn handler(ctx: Context<UpdateTransferFee>, fee_basis_points: u16, max_fee: 
         TransferFeeError::FeeTooHigh
     );
 
-    msg!("Updating transfer fee");
-    msg!(
-        "  New fee: {} basis points ({}%)",
-        fee_basis_points,
-        fee_basis_points as f64 / 100.0
-    );
-    msg!("  New max fee: {} tokens", max_fee);
+    msg!("Updating transfer fee to {} bps, max {}", fee_basis_points, max_fee);
 
     // Update fee configuration via CPI to Token-2022 program
-    // Implementation would go here
+    invoke(
+        &transfer_fee_instruction::set_transfer_fee(
+            ctx.accounts.token_program.key,
+            ctx.accounts.mint.key,
+            ctx.accounts.fee_authority.key,
+            &[],  // No multisig signers
+            fee_basis_points,
+            max_fee,
+        )?,
+        &[
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.fee_authority.to_account_info(),
+        ],
+    )?;
 
+    msg!("Transfer fee updated successfully");
     Ok(())
 }
 

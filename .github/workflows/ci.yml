@@ -77,6 +77,9 @@ jobs:
       - name: Check if templates changed
         id: check-templates
         run: |
+          # Fetch the base branch for comparison
+          git fetch origin ${{ github.base_ref }} --depth=1
+          
           # Get list of changed files
           CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
           

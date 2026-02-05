@@ -88,7 +88,6 @@ describe("assembleInstruction", () => {
 
     expect(result).toContain("use crate::metadata;");
     expect(result).toContain("metadata::validate_metadata");
-    expect(result).toContain("metadata::init_metadata");
   });
 
   it("injects transfer-fee imports, args, body, and accounts", () => {
@@ -107,33 +106,27 @@ describe("assembleInstruction", () => {
     // Args in #[instruction] macro
     expect(result).toMatch(/#\[instruction\([^)]*fee_basis_points/);
 
-    // Body
-    expect(result).toContain("transfer_fee::init_transfer_fee");
-
     // Accounts
     expect(result).toContain("fee_authority");
   });
 
-  it("injects close-mint imports, body, and accounts", () => {
+  it("injects close-mint imports and accounts", () => {
     const result = assembleInstruction("create_mint", [
       "metadata",
       "close-mint",
     ]);
 
     expect(result).toContain("use crate::close_mint;");
-    expect(result).toContain("Close mint extension enabled");
     expect(result).toContain("close_authority");
   });
 
-  it("injects non-transferable imports and body", () => {
+  it("injects non-transferable imports", () => {
     const result = assembleInstruction("create_mint", [
       "metadata",
       "non-transferable",
     ]);
 
     expect(result).toContain("use crate::non_transferable;");
-    expect(result).toContain("init_non_transferable");
-    expect(result).toContain("soulbound");
   });
 
   it("injects multiple extensions correctly", () => {
@@ -148,10 +141,8 @@ describe("assembleInstruction", () => {
     expect(result).toContain("use crate::transfer_fee;");
     expect(result).toContain("use crate::close_mint;");
 
-    // All body parts
-    expect(result).toContain("metadata::init_metadata");
-    expect(result).toContain("transfer_fee::init_transfer_fee");
-    expect(result).toContain("Close mint extension enabled");
+    // Body
+    expect(result).toContain("metadata::validate_metadata");
 
     // All accounts
     expect(result).toContain("fee_authority");

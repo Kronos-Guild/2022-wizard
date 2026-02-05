@@ -552,7 +552,8 @@ export type ExtensionId = keyof typeof extensions;
  */
 function stripMarkerComments(code: string): string {
   // Remove block markers: // @wizard:inject.X.Y ... // @wizard:end
-  let result = code.replace(/^[ \\t]*\\/\\/ @wizard:inject\\.[^\\n]*\\n(.*?)^[ \\t]*\\/\\/ @wizard:end\\n?/gms, '');
+  // Using [\\s\\S] instead of . with 's' flag for ES5 compatibility
+  let result = code.replace(/^[ \\t]*\\/\\/ @wizard:inject\\.[^\\n]*\\n[\\s\\S]*?^[ \\t]*\\/\\/ @wizard:end\\n?/gm, '');
   // Remove inline markers: // @wizard:inject.X.args ...
   result = result.replace(/^[ \\t]*\\/\\/ @wizard:inject\\.[^\\n]*\\n?/gm, '');
   // Clean up any resulting double blank lines

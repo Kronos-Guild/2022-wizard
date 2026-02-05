@@ -6,10 +6,6 @@ use spl_token_2022::{
     instruction as token_instruction,
 };
 
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
-
 // @wizard:inject.lib.modules
 pub mod close_mint;
 // @wizard:end
@@ -33,7 +29,6 @@ use spl_token_2022::extension::mint_close_authority::instruction as close_author
 // @wizard:end
 
 // @wizard:inject.create_mint.init_extensions
-    // Initialize MintCloseAuthority extension
     invoke(
         &close_authority_ix::initialize_mint_close_authority(
             token_program.key,
@@ -49,10 +44,6 @@ use spl_token_2022::extension::mint_close_authority::instruction as close_author
     /// The close authority that can close the mint
     pub close_authority: Signer<'info>,
 // @wizard:end
-
-// =============================================================================
-// Extension Implementation
-// =============================================================================
 
 /// Close mint extension allows closing the mint account to reclaim rent.
 ///

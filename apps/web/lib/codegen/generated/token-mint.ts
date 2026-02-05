@@ -61,12 +61,26 @@ pub mod token_mint {
 `,
   instructions: {
     "create_mint": `use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
+use spl_token_2022::{
+    extension::{metadata_pointer::instruction as metadata_pointer_instruction, ExtensionType},
+    instruction as token_instruction,
+    state::Mint,
+};
+use spl_token_metadata_interface::{instruction as metadata_instruction, state::TokenMetadata};
 
-/// Creates a new Token-2022 mint.
+/// Creates a new Token-2022 mint with metadata extension.
 ///
-/// This is the base instruction that creates a mint account.
-/// Extensions are added by including additional files from the extensions/ folder.
+/// This is the base instruction that creates a mint account with on-chain metadata.
+/// The mint is created with MetadataPointer and TokenMetadata extensions.
+/// Additional extensions can be enabled via the wizard.
+///
+/// # Arguments
+/// * \`name\` - Token name (1-32 characters)
+/// * \`symbol\` - Token symbol (1-10 characters)
+/// * \`uri\` - URI pointing to off-chain JSON metadata
+/// * \`decimals\` - Number of decimal places (0-9 typically)
 pub fn handler(
     ctx: Context<CreateMint>,
     name: String,
@@ -78,9 +92,106 @@ pub fn handler(
     msg!("Decimals: {}", decimals);
     msg!("URI: {}", uri);
 
-    // Base mint creation logic
-    // The actual CPI calls will be implemented based on enabled extensions
+    let payer = &ctx.accounts.payer;
+    let mint = &ctx.accounts.mint;
+    let mint_authority = &ctx.accounts.mint_authority;
+    let token_program = &ctx.accounts.token_program;
+    let system_program = &ctx.accounts.system_program;
 
+    let mut extension_types = vec![ExtensionType::MetadataPointer];
+
+    // @wizard:inject.create_mint.extension_types
+    // @wizard:end
+
+    let mint_space = ExtensionType::try_calculate_account_len::<Mint>(&extension_types)
+        .map_err(|_| ErrorCode::AccountDidNotSerialize)?;
+
+    let metadata = TokenMetadata {
+        update_authority: Some(mint_authority.key())
+            .try_into()
+            .map_err(|_| ErrorCode::AccountDidNotSerialize)?,
+        mint: mint.key(),
+        name: name.clone(),
+        symbol: symbol.clone(),
+        uri: uri.clone(),
+        additional_metadata: vec![],
+    };
+    let metadata_space = metadata
+        .tlv_size_of()
+        .map_err(|_| ErrorCode::AccountDidNotSerialize)?;
+
+    let total_space = mint_space + metadata_space;
+    msg!(
+        "Allocating {} bytes (mint: {}, metadata: {})",
+        total_space,
+        mint_space,
+        metadata_space
+    );
+
+    let rent = Rent::get()?;
+    let lamports = rent.minimum_balance(total_space);
+
+    invoke(
+        &anchor_lang::solana_program::system_instruction::create_account(
+            payer.key,
+            mint.key,
+            lamports,
+            total_space as u64,
+            token_program.key,
+        ),
+        &[
+            payer.to_account_info(),
+            mint.to_account_info(),
+            system_program.to_account_info(),
+        ],
+    )?;
+    msg!("Mint account created");
+
+    invoke(
+        &metadata_pointer_instruction::initialize(
+            token_program.key,
+            mint.key,
+            Some(mint_authority.key()),
+            Some(mint.key()),
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("MetadataPointer initialized");
+
+    // @wizard:inject.create_mint.init_extensions
+    // @wizard:end
+
+    invoke(
+        &token_instruction::initialize_mint2(
+            token_program.key,
+            mint.key,
+            mint_authority.key,
+            None,
+            decimals,
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("Mint initialized with {} decimals", decimals);
+
+    invoke(
+        &metadata_instruction::initialize(
+            token_program.key,
+            mint.key,
+            mint_authority.key,
+            mint.key,
+            mint_authority.key,
+            name.clone(),
+            symbol.clone(),
+            uri.clone(),
+        ),
+        &[mint.to_account_info(), mint_authority.to_account_info()],
+    )?;
+    msg!("Metadata initialized: {} ({})", name, symbol);
+
+    // @wizard:inject.create_mint.body
+    // @wizard:end
+
+    msg!("Mint created successfully: {}", mint.key());
     Ok(())
 }
 
@@ -92,11 +203,12 @@ pub struct CreateMint<'info> {
     pub payer: Signer<'info>,
 
     /// CHECK: The mint account to be created
-    /// This will be initialized as a Token-2022 mint
+    /// This will be initialized as a Token-2022 mint with extensions
     #[account(mut)]
     pub mint: Signer<'info>,
 
     /// The mint authority that can mint new tokens
+    /// Also serves as the metadata update authority
     pub mint_authority: Signer<'info>,
 
     /// Token-2022 program
@@ -194,20 +306,12 @@ export const extensions: Record<string, Extension> = {
       "create_mint": {
         imports: `use crate::metadata;`,
         args: undefined,
-        body: `    // Initialize metadata extension
-    metadata::validate_metadata(&name, &symbol)?;
-    let _metadata = metadata::init_metadata(name.clone(), symbol.clone(), uri.clone())?;
-    msg!("Metadata extension initialized");`,
+        body: `    metadata::validate_metadata(&name, &symbol, &uri)?;`,
         accounts: undefined,
       },
     },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
-use spl_token_metadata_interface::state::TokenMetadata;
-
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
 
 // @wizard:inject.lib.modules
 pub mod metadata;
@@ -218,51 +322,51 @@ use crate::metadata;
 // @wizard:end
 
 // @wizard:inject.create_mint.body
-    // Initialize metadata extension
-    metadata::validate_metadata(&name, &symbol)?;
-    let _metadata = metadata::init_metadata(name.clone(), symbol.clone(), uri.clone())?;
-    msg!("Metadata extension initialized");
+    metadata::validate_metadata(&name, &symbol, &uri)?;
 // @wizard:end
 
-// =============================================================================
-// Extension Implementation
-// =============================================================================
+/// Maximum length for token name
+pub const MAX_NAME_LENGTH: usize = 32;
 
-/// Initialize metadata extension for the mint.
-///
-/// This adds on-chain metadata (name, symbol, uri) to the token using
-/// the Token-2022 metadata extension.
+/// Maximum length for token symbol
+pub const MAX_SYMBOL_LENGTH: usize = 10;
+
+/// Maximum length for metadata URI
+pub const MAX_URI_LENGTH: usize = 200;
+
+/// Validates metadata fields before mint creation.
 ///
 /// # Arguments
-/// * \`name\` - The token name
-/// * \`symbol\` - The token symbol  
-/// * \`uri\` - URI pointing to off-chain JSON metadata
-pub fn init_metadata(name: String, symbol: String, uri: String) -> Result<TokenMetadata> {
-    msg!("Initializing metadata extension");
-    msg!("  Name: {}", name);
-    msg!("  Symbol: {}", symbol);
-    msg!("  URI: {}", uri);
-
-    let metadata = TokenMetadata {
-        name,
-        symbol,
-        uri,
-        ..Default::default()
-    };
-
-    Ok(metadata)
-}
-
-/// Validates metadata fields
-pub fn validate_metadata(name: &str, symbol: &str) -> Result<()> {
+/// * \`name\` - Token name (1-32 characters)
+/// * \`symbol\` - Token symbol (1-10 characters)
+/// * \`uri\` - Metadata URI (1-200 characters)
+///
+/// # Errors
+/// Returns error if any field is empty or exceeds maximum length.
+pub fn validate_metadata(name: &str, symbol: &str, uri: &str) -> Result<()> {
+    // Validate name
     require!(
-        !name.is_empty() && name.len() <= 32,
+        !name.is_empty() && name.len() <= MAX_NAME_LENGTH,
         MetadataError::InvalidName
     );
+
+    // Validate symbol
     require!(
-        !symbol.is_empty() && symbol.len() <= 10,
+        !symbol.is_empty() && symbol.len() <= MAX_SYMBOL_LENGTH,
         MetadataError::InvalidSymbol
     );
+
+    // Validate URI
+    require!(
+        !uri.is_empty() && uri.len() <= MAX_URI_LENGTH,
+        MetadataError::InvalidUri
+    );
+
+    msg!("Metadata validation passed");
+    msg!("  Name: {} ({} chars)", name, name.len());
+    msg!("  Symbol: {} ({} chars)", symbol, symbol.len());
+    msg!("  URI: {} chars", uri.len());
+
     Ok(())
 }
 
@@ -273,6 +377,9 @@ pub enum MetadataError {
 
     #[msg("Token symbol must be 1-10 characters")]
     InvalidSymbol,
+
+    #[msg("Token URI must be 1-200 characters")]
+    InvalidUri,
 }
 `,
     },
@@ -315,22 +422,21 @@ pub fn update_transfer_fee(
 }`,
       },
       "create_mint": {
-        imports: `use crate::transfer_fee;`,
+        imports: `use crate::transfer_fee;
+use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_ix;`,
         args: ["fee_basis_points: u16","max_fee: u64"],
-        body: `    // Initialize transfer fee extension
-    let _fee_config = transfer_fee::init_transfer_fee(fee_basis_points, max_fee)?;
-    msg!("Transfer fee extension initialized: {} bps, max {}", fee_basis_points, max_fee);`,
-        accounts: `    /// The fee authority that can update and collect fees
+        body: undefined,
+        accounts: `    /// The fee authority that can update fees and withdraw withheld amounts
     pub fee_authority: Signer<'info>,`,
       },
     },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
+use anchor_spl::token_2022::Token2022;
+use spl_token_2022::extension::{transfer_fee::instruction as transfer_fee_instruction, ExtensionType};
 
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
-// These comments tell the wizard what code to inject into base files.
+pub mod update_fee;
 
 // @wizard:inject.lib.modules
 pub mod transfer_fee;
@@ -338,55 +444,60 @@ pub mod transfer_fee;
 
 // @wizard:inject.create_mint.imports
 use crate::transfer_fee;
+use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_ix;
 // @wizard:end
 
 // @wizard:inject.create_mint.args fee_basis_points: u16, max_fee: u64
 
-// @wizard:inject.create_mint.body
-    // Initialize transfer fee extension
-    let _fee_config = transfer_fee::init_transfer_fee(fee_basis_points, max_fee)?;
-    msg!("Transfer fee extension initialized: {} bps, max {}", fee_basis_points, max_fee);
+// @wizard:inject.create_mint.extension_types
+    extension_types.push(ExtensionType::TransferFeeConfig);
+// @wizard:end
+
+// @wizard:inject.create_mint.init_extensions
+    transfer_fee::validate_fee_config(fee_basis_points, max_fee)?;
+    invoke(
+        &transfer_fee_ix::initialize_transfer_fee_config(
+            token_program.key,
+            mint.key,
+            Some(&ctx.accounts.fee_authority.key()),  // transfer_fee_config_authority
+            Some(&ctx.accounts.fee_authority.key()),  // withdraw_withheld_authority
+            fee_basis_points,
+            max_fee,
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("TransferFeeConfig initialized: {} bps, max {}", fee_basis_points, max_fee);
 // @wizard:end
 
 // @wizard:inject.create_mint.accounts
-    /// The fee authority that can update and collect fees
+    /// The fee authority that can update fees and withdraw withheld amounts
     pub fee_authority: Signer<'info>,
 // @wizard:end
-
-// =============================================================================
-// Extension Implementation
-// =============================================================================
 
 /// Maximum allowed transfer fee in basis points (100% = 10000 bps)
 pub const MAX_FEE_BASIS_POINTS: u16 = 10000;
 
-/// Configuration for the transfer fee extension.
-///
-/// Transfer fees are charged on every token transfer and collected
-/// in a withheld account that can be harvested by the fee authority.
+/// Validates transfer fee configuration
+pub fn validate_fee_config(fee_basis_points: u16, max_fee: u64) -> Result<()> {
+    require!(
+        fee_basis_points <= MAX_FEE_BASIS_POINTS,
+        TransferFeeError::FeeTooHigh
+    );
+    msg!("Transfer fee config validated: {} bps, max {} tokens", fee_basis_points, max_fee);
+    Ok(())
+}
+
+/// Configuration for the transfer fee extension (for reference/calculation)
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub struct TransferFeeConfig {
-    /// Fee in basis points (1 bp = 0.01%)
-    /// Example: 100 = 1% fee
     pub fee_basis_points: u16,
-
-    /// Maximum fee in token units (with decimals)
-    /// This caps the fee for large transfers
     pub max_fee: u64,
 }
 
 impl TransferFeeConfig {
-    /// Creates a new transfer fee configuration
     pub fn new(fee_basis_points: u16, max_fee: u64) -> Result<Self> {
-        require!(
-            fee_basis_points <= MAX_FEE_BASIS_POINTS,
-            TransferFeeError::FeeTooHigh
-        );
-
-        Ok(Self {
-            fee_basis_points,
-            max_fee,
-        })
+        require!(fee_basis_points <= MAX_FEE_BASIS_POINTS, TransferFeeError::FeeTooHigh);
+        Ok(Self { fee_basis_points, max_fee })
     }
 
     /// Calculates the fee for a given transfer amount
@@ -396,22 +507,8 @@ impl TransferFeeConfig {
             .unwrap_or(0)
             .checked_div(10000)
             .unwrap_or(0) as u64;
-
         std::cmp::min(fee, self.max_fee)
     }
-}
-
-/// Initialize transfer fee extension on the mint
-pub fn init_transfer_fee(fee_basis_points: u16, max_fee: u64) -> Result<TransferFeeConfig> {
-    msg!("Initializing transfer fee extension");
-    msg!(
-        "  Fee: {} basis points ({}%)",
-        fee_basis_points,
-        fee_basis_points as f64 / 100.0
-    );
-    msg!("  Max fee: {} tokens", max_fee);
-
-    TransferFeeConfig::new(fee_basis_points, max_fee)
 }
 
 #[error_code]
@@ -424,13 +521,11 @@ pub enum TransferFeeError {
 }
 `,
       "update_fee.rs": `use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
+use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_instruction;
 
-use super::{TransferFeeConfig, TransferFeeError, MAX_FEE_BASIS_POINTS};
-
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
+use super::{TransferFeeError, MAX_FEE_BASIS_POINTS};
 
 // @wizard:inject.lib.instructions
 
@@ -445,10 +540,6 @@ pub fn update_transfer_fee(
 }
 // @wizard:end
 
-// =============================================================================
-// Handler Implementation
-// =============================================================================
-
 /// Updates the transfer fee configuration for a mint.
 ///
 /// Only the fee authority can update the fee.
@@ -459,17 +550,29 @@ pub fn handler(ctx: Context<UpdateTransferFee>, fee_basis_points: u16, max_fee: 
         TransferFeeError::FeeTooHigh
     );
 
-    msg!("Updating transfer fee");
     msg!(
-        "  New fee: {} basis points ({}%)",
+        "Updating transfer fee to {} bps, max {}",
         fee_basis_points,
-        fee_basis_points as f64 / 100.0
+        max_fee
     );
-    msg!("  New max fee: {} tokens", max_fee);
 
     // Update fee configuration via CPI to Token-2022 program
-    // Implementation would go here
+    invoke(
+        &transfer_fee_instruction::set_transfer_fee(
+            ctx.accounts.token_program.key,
+            ctx.accounts.mint.key,
+            ctx.accounts.fee_authority.key,
+            &[], // No multisig signers
+            fee_basis_points,
+            max_fee,
+        )?,
+        &[
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.fee_authority.to_account_info(),
+        ],
+    )?;
 
+    msg!("Transfer fee updated successfully");
     Ok(())
 }
 
@@ -507,21 +610,22 @@ pub struct UpdateTransferFee<'info> {
     }`,
       },
       "create_mint": {
-        imports: `use crate::close_mint;`,
+        imports: `use crate::close_mint;
+use spl_token_2022::extension::mint_close_authority::instruction as close_authority_ix;`,
         args: undefined,
-        body: `    // Close mint extension enabled - mint can be closed when supply is 0
-    msg!("Close mint extension enabled");`,
+        body: undefined,
         accounts: `    /// The close authority that can close the mint
     pub close_authority: Signer<'info>,`,
       },
     },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
-
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
+use spl_token_2022::{
+    extension::{mint_close_authority::instruction as close_authority_instruction, ExtensionType},
+    instruction as token_instruction,
+};
 
 // @wizard:inject.lib.modules
 pub mod close_mint;
@@ -538,11 +642,23 @@ pub mod close_mint;
 
 // @wizard:inject.create_mint.imports
 use crate::close_mint;
+use spl_token_2022::extension::mint_close_authority::instruction as close_authority_ix;
 // @wizard:end
 
-// @wizard:inject.create_mint.body
-    // Close mint extension enabled - mint can be closed when supply is 0
-    msg!("Close mint extension enabled");
+// @wizard:inject.create_mint.extension_types
+    extension_types.push(ExtensionType::MintCloseAuthority);
+// @wizard:end
+
+// @wizard:inject.create_mint.init_extensions
+    invoke(
+        &close_authority_ix::initialize_mint_close_authority(
+            token_program.key,
+            mint.key,
+            Some(&ctx.accounts.close_authority.key()),
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("MintCloseAuthority initialized: {}", ctx.accounts.close_authority.key());
 // @wizard:end
 
 // @wizard:inject.create_mint.accounts
@@ -550,32 +666,36 @@ use crate::close_mint;
     pub close_authority: Signer<'info>,
 // @wizard:end
 
-// =============================================================================
-// Extension Implementation
-// =============================================================================
-
-/// Close mint extension allows the mint authority to close the mint
-/// account and reclaim the rent.
-///
-/// This is useful for:
-/// - One-time token distributions where the mint is no longer needed
-/// - Reclaiming SOL from unused mints
-/// - Cleaning up test mints
+/// Close mint extension allows closing the mint account to reclaim rent.
 ///
 /// WARNING: Once closed, the mint cannot be recreated with the same address.
 
-/// Closes the mint account and returns rent to the payer.
+/// Closes the mint account and returns rent to the destination.
 ///
 /// Requirements:
 /// - Total supply must be 0 (all tokens burned)
 /// - Caller must be the close authority
 pub fn handler(ctx: Context<CloseMint>) -> Result<()> {
-    msg!("Closing mint account");
-    msg!("  Rent returned to: {}", ctx.accounts.destination.key());
+    msg!("Closing mint account: {}", ctx.accounts.mint.key());
+    msg!("Rent returned to: {}", ctx.accounts.destination.key());
 
     // Close mint via CPI to Token-2022 program
-    // Implementation would go here
+    invoke(
+        &token_instruction::close_account(
+            ctx.accounts.token_program.key,
+            ctx.accounts.mint.key,
+            ctx.accounts.destination.key,
+            ctx.accounts.close_authority.key,
+            &[],  // No multisig signers
+        )?,
+        &[
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.destination.to_account_info(),
+            ctx.accounts.close_authority.to_account_info(),
+        ],
+    )?;
 
+    msg!("Mint closed successfully");
     Ok(())
 }
 
@@ -622,20 +742,19 @@ pub enum CloseMintError {
         instructions: undefined,
       },
       "create_mint": {
-        imports: `use crate::non_transferable;`,
+        imports: `use crate::non_transferable;
+use spl_token_2022::extension::non_transferable::instruction as non_transferable_ix;`,
         args: undefined,
-        body: `    // Initialize non-transferable (soulbound) extension
-    let _config = non_transferable::init_non_transferable()?;
-    msg!("Non-transferable extension initialized - tokens are soulbound");`,
+        body: undefined,
         accounts: undefined,
       },
     },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
-
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
+use anchor_lang::solana_program::program::invoke;
+use spl_token_2022::extension::{
+    non_transferable::instruction as non_transferable_instruction, ExtensionType,
+};
 
 // @wizard:inject.lib.modules
 pub mod non_transferable;
@@ -643,17 +762,23 @@ pub mod non_transferable;
 
 // @wizard:inject.create_mint.imports
 use crate::non_transferable;
+use spl_token_2022::extension::non_transferable::instruction as non_transferable_ix;
 // @wizard:end
 
-// @wizard:inject.create_mint.body
-    // Initialize non-transferable (soulbound) extension
-    let _config = non_transferable::init_non_transferable()?;
-    msg!("Non-transferable extension initialized - tokens are soulbound");
+// @wizard:inject.create_mint.extension_types
+    extension_types.push(ExtensionType::NonTransferable);
 // @wizard:end
 
-// =============================================================================
-// Extension Implementation
-// =============================================================================
+// @wizard:inject.create_mint.init_extensions
+    invoke(
+        &non_transferable_ix::initialize_non_transferable_mint(
+            token_program.key,
+            mint.key,
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("NonTransferable initialized - tokens are soulbound");
+// @wizard:end
 
 /// Non-transferable (Soulbound) token extension.
 ///
@@ -667,39 +792,6 @@ use crate::non_transferable;
 ///
 /// Note: This extension is mutually exclusive with transfer-fee
 /// (fees don't make sense if transfers are impossible).
-
-/// Marker struct for non-transferable tokens.
-///
-/// This extension has no configuration - it's simply enabled or not.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
-pub struct NonTransferableConfig {
-    /// Timestamp when the extension was initialized
-    pub initialized_at: i64,
-}
-
-impl NonTransferableConfig {
-    pub fn new() -> Self {
-        Self {
-            initialized_at: Clock::get().map(|c| c.unix_timestamp).unwrap_or(0),
-        }
-    }
-}
-
-impl Default for NonTransferableConfig {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Initialize non-transferable extension on the mint.
-///
-/// Once initialized, all tokens minted will be non-transferable.
-pub fn init_non_transferable() -> Result<NonTransferableConfig> {
-    msg!("Initializing non-transferable (soulbound) extension");
-    msg!("  Tokens minted from this mint cannot be transferred");
-
-    Ok(NonTransferableConfig::new())
-}
 
 #[error_code]
 pub enum NonTransferableError {
@@ -719,6 +811,20 @@ export type ExtensionId = keyof typeof extensions;
 // =============================================================================
 // Code Assembly Functions
 // =============================================================================
+
+/**
+ * Strips all @wizard marker comments from the code.
+ * Handles both block markers (// @wizard:inject... // @wizard:end) and inline markers.
+ */
+function stripMarkerComments(code: string): string {
+  // Remove block markers: // @wizard:inject.X.Y ... // @wizard:end
+  let result = code.replace(/^[ \t]*\/\/ @wizard:inject\.[^\n]*\n(.*?)^[ \t]*\/\/ @wizard:end\n?/gms, '');
+  // Remove inline markers: // @wizard:inject.X.args ...
+  result = result.replace(/^[ \t]*\/\/ @wizard:inject\.[^\n]*\n?/gm, '');
+  // Clean up any resulting double blank lines
+  result = result.replace(/\n{3,}/g, '\n\n');
+  return result;
+}
 
 /**
  * Assembles lib.rs with enabled extensions injected.
@@ -768,6 +874,9 @@ export function assembleLib(enabledExtensions: ExtensionId[], programName?: stri
       `$1\n${instrCode}`
     );
   }
+
+  // Strip any remaining marker comments
+  code = stripMarkerComments(code);
 
   return code;
 }
@@ -846,6 +955,9 @@ export function assembleInstruction(
       `pub system_program: Program<'info, System>,\n\n    // Extension accounts\n${accountsCode}\n}`
     );
   }
+
+  // Strip any remaining marker comments
+  code = stripMarkerComments(code);
 
   return code;
 }

@@ -6,10 +6,7 @@ use spl_token_2022::{
     instruction as token_instruction,
     state::Mint,
 };
-use spl_token_metadata_interface::{
-    instruction as metadata_instruction,
-    state::TokenMetadata,
-};
+use spl_token_metadata_interface::{instruction as metadata_instruction, state::TokenMetadata};
 
 /// Creates a new Token-2022 mint with metadata extension.
 ///
@@ -39,25 +36,17 @@ pub fn handler(
     let token_program = &ctx.accounts.token_program;
     let system_program = &ctx.accounts.system_program;
 
-    // =========================================================================
-    // STEP 1: Build extension types list
-    // =========================================================================
-    // Base extension: MetadataPointer (always included)
     let mut extension_types = vec![ExtensionType::MetadataPointer];
 
     // @wizard:inject.create_mint.extension_types
-    // Extensions add their types here (e.g., extension_types.push(ExtensionType::TransferFeeConfig);)
     // @wizard:end
 
-    // =========================================================================
-    // STEP 2: Calculate space
-    // =========================================================================
     let mint_space = ExtensionType::try_calculate_account_len::<Mint>(&extension_types)
         .map_err(|_| ErrorCode::AccountDidNotSerialize)?;
 
-    // Calculate TokenMetadata space (variable length)
     let metadata = TokenMetadata {
-        update_authority: Some(mint_authority.key()).try_into()
+        update_authority: Some(mint_authority.key())
+            .try_into()
             .map_err(|_| ErrorCode::AccountDidNotSerialize)?,
         mint: mint.key(),
         name: name.clone(),
@@ -65,15 +54,18 @@ pub fn handler(
         uri: uri.clone(),
         additional_metadata: vec![],
     };
-    let metadata_space = metadata.tlv_size_of()
+    let metadata_space = metadata
+        .tlv_size_of()
         .map_err(|_| ErrorCode::AccountDidNotSerialize)?;
 
     let total_space = mint_space + metadata_space;
-    msg!("Allocating {} bytes (mint: {}, metadata: {})", total_space, mint_space, metadata_space);
+    msg!(
+        "Allocating {} bytes (mint: {}, metadata: {})",
+        total_space,
+        mint_space,
+        metadata_space
+    );
 
-    // =========================================================================
-    // STEP 3: Create mint account
-    // =========================================================================
     let rent = Rent::get()?;
     let lamports = rent.minimum_balance(total_space);
 
@@ -93,11 +85,6 @@ pub fn handler(
     )?;
     msg!("Mint account created");
 
-    // =========================================================================
-    // STEP 4: Initialize extensions (BEFORE mint initialization)
-    // =========================================================================
-
-    // 4a. Initialize MetadataPointer (always)
     invoke(
         &metadata_pointer_instruction::initialize(
             token_program.key,
@@ -110,27 +97,20 @@ pub fn handler(
     msg!("MetadataPointer initialized");
 
     // @wizard:inject.create_mint.init_extensions
-    // Extensions initialize here (BEFORE mint init)
     // @wizard:end
 
-    // =========================================================================
-    // STEP 5: Initialize the mint
-    // =========================================================================
     invoke(
         &token_instruction::initialize_mint2(
             token_program.key,
             mint.key,
             mint_authority.key,
-            None, // freeze authority
+            None,
             decimals,
         )?,
         &[mint.to_account_info()],
     )?;
     msg!("Mint initialized with {} decimals", decimals);
 
-    // =========================================================================
-    // STEP 6: Initialize TokenMetadata (AFTER mint initialization)
-    // =========================================================================
     invoke(
         &metadata_instruction::initialize(
             token_program.key,
@@ -142,15 +122,11 @@ pub fn handler(
             symbol.clone(),
             uri.clone(),
         ),
-        &[
-            mint.to_account_info(),
-            mint_authority.to_account_info(),
-        ],
+        &[mint.to_account_info(), mint_authority.to_account_info()],
     )?;
     msg!("Metadata initialized: {} ({})", name, symbol);
 
     // @wizard:inject.create_mint.body
-    // Additional extension logic (post-mint initialization)
     // @wizard:end
 
     msg!("Mint created successfully: {}", mint.key());

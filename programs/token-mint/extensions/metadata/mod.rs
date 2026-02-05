@@ -1,12 +1,5 @@
 use anchor_lang::prelude::*;
 
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
-// NOTE: Metadata is a "locked" extension - always included in base.
-// The actual metadata initialization happens in create_mint.rs.
-// This file provides validation helpers that can be used by the wizard.
-
 // @wizard:inject.lib.modules
 pub mod metadata;
 // @wizard:end
@@ -16,13 +9,8 @@ use crate::metadata;
 // @wizard:end
 
 // @wizard:inject.create_mint.body
-    // Validate metadata fields before initialization
     metadata::validate_metadata(&name, &symbol, &uri)?;
 // @wizard:end
-
-// =============================================================================
-// Extension Implementation
-// =============================================================================
 
 /// Maximum length for token name
 pub const MAX_NAME_LENGTH: usize = 32;

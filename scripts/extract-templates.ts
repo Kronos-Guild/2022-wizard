@@ -547,6 +547,20 @@ export type ExtensionId = keyof typeof extensions;
 // =============================================================================
 
 /**
+ * Strips all @wizard marker comments from the code.
+ * Handles both block markers (// @wizard:inject... // @wizard:end) and inline markers.
+ */
+function stripMarkerComments(code: string): string {
+  // Remove block markers: // @wizard:inject.X.Y ... // @wizard:end
+  let result = code.replace(/^[ \\t]*\\/\\/ @wizard:inject\\.[^\\n]*\\n(.*?)^[ \\t]*\\/\\/ @wizard:end\\n?/gms, '');
+  // Remove inline markers: // @wizard:inject.X.args ...
+  result = result.replace(/^[ \\t]*\\/\\/ @wizard:inject\\.[^\\n]*\\n?/gm, '');
+  // Clean up any resulting double blank lines
+  result = result.replace(/\\n{3,}/g, '\\n\\n');
+  return result;
+}
+
+/**
  * Assembles lib.rs with enabled extensions injected.
  * @param enabledExtensions - List of enabled extension IDs
  * @param programName - The program name in snake_case (e.g., "my_token")
@@ -594,6 +608,9 @@ export function assembleLib(enabledExtensions: ExtensionId[], programName?: stri
       \`$1\\n\${instrCode}\`
     );
   }
+
+  // Strip any remaining marker comments
+  code = stripMarkerComments(code);
 
   return code;
 }
@@ -672,6 +689,9 @@ export function assembleInstruction(
       \`pub system_program: Program<'info, System>,\\n\\n    // Extension accounts\\n\${accountsCode}\\n}\`
     );
   }
+
+  // Strip any remaining marker comments
+  code = stripMarkerComments(code);
 
   return code;
 }

@@ -1,10 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
-use spl_token_2022::extension::{non_transferable::instruction as non_transferable_instruction, ExtensionType};
-
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
+use spl_token_2022::extension::{
+    non_transferable::instruction as non_transferable_instruction, ExtensionType,
+};
 
 // @wizard:inject.lib.modules
 pub mod non_transferable;
@@ -20,7 +18,6 @@ use spl_token_2022::extension::non_transferable::instruction as non_transferable
 // @wizard:end
 
 // @wizard:inject.create_mint.init_extensions
-    // Initialize NonTransferable extension (soulbound tokens)
     invoke(
         &non_transferable_ix::initialize_non_transferable_mint(
             token_program.key,
@@ -30,10 +27,6 @@ use spl_token_2022::extension::non_transferable::instruction as non_transferable
     )?;
     msg!("NonTransferable initialized - tokens are soulbound");
 // @wizard:end
-
-// =============================================================================
-// Extension Implementation
-// =============================================================================
 
 /// Non-transferable (Soulbound) token extension.
 ///

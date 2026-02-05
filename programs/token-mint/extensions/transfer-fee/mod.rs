@@ -5,10 +5,6 @@ use spl_token_2022::extension::{transfer_fee::instruction as transfer_fee_instru
 
 pub mod update_fee;
 
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
-
 // @wizard:inject.lib.modules
 pub mod transfer_fee;
 // @wizard:end
@@ -25,7 +21,6 @@ use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_ix;
 // @wizard:end
 
 // @wizard:inject.create_mint.init_extensions
-    // Initialize TransferFeeConfig extension
     transfer_fee::validate_fee_config(fee_basis_points, max_fee)?;
     invoke(
         &transfer_fee_ix::initialize_transfer_fee_config(
@@ -45,10 +40,6 @@ use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_ix;
     /// The fee authority that can update fees and withdraw withheld amounts
     pub fee_authority: Signer<'info>,
 // @wizard:end
-
-// =============================================================================
-// Extension Implementation
-// =============================================================================
 
 /// Maximum allowed transfer fee in basis points (100% = 10000 bps)
 pub const MAX_FEE_BASIS_POINTS: u16 = 10000;

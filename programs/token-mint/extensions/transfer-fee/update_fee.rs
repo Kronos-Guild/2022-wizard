@@ -5,10 +5,6 @@ use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_instruc
 
 use super::{TransferFeeError, MAX_FEE_BASIS_POINTS};
 
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
-
 // @wizard:inject.lib.instructions
 
 /// Updates the transfer fee configuration.
@@ -22,10 +18,6 @@ pub fn update_transfer_fee(
 }
 // @wizard:end
 
-// =============================================================================
-// Handler Implementation
-// =============================================================================
-
 /// Updates the transfer fee configuration for a mint.
 ///
 /// Only the fee authority can update the fee.
@@ -36,7 +28,11 @@ pub fn handler(ctx: Context<UpdateTransferFee>, fee_basis_points: u16, max_fee: 
         TransferFeeError::FeeTooHigh
     );
 
-    msg!("Updating transfer fee to {} bps, max {}", fee_basis_points, max_fee);
+    msg!(
+        "Updating transfer fee to {} bps, max {}",
+        fee_basis_points,
+        max_fee
+    );
 
     // Update fee configuration via CPI to Token-2022 program
     invoke(
@@ -44,7 +40,7 @@ pub fn handler(ctx: Context<UpdateTransferFee>, fee_basis_points: u16, max_fee: 
             ctx.accounts.token_program.key,
             ctx.accounts.mint.key,
             ctx.accounts.fee_authority.key,
-            &[],  // No multisig signers
+            &[], // No multisig signers
             fee_basis_points,
             max_fee,
         )?,

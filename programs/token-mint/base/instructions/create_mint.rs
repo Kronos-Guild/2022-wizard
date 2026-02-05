@@ -1,10 +1,24 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
+use spl_token_2022::{
+    extension::{metadata_pointer::instruction as metadata_pointer_instruction, ExtensionType},
+    instruction as token_instruction,
+    state::Mint,
+};
+use spl_token_metadata_interface::{instruction as metadata_instruction, state::TokenMetadata};
 
-/// Creates a new Token-2022 mint.
+/// Creates a new Token-2022 mint with metadata extension.
 ///
-/// This is the base instruction that creates a mint account.
-/// Extensions are added by including additional files from the extensions/ folder.
+/// This is the base instruction that creates a mint account with on-chain metadata.
+/// The mint is created with MetadataPointer and TokenMetadata extensions.
+/// Additional extensions can be enabled via the wizard.
+///
+/// # Arguments
+/// * `name` - Token name (1-32 characters)
+/// * `symbol` - Token symbol (1-10 characters)
+/// * `uri` - URI pointing to off-chain JSON metadata
+/// * `decimals` - Number of decimal places (0-9 typically)
 pub fn handler(
     ctx: Context<CreateMint>,
     name: String,
@@ -16,9 +30,106 @@ pub fn handler(
     msg!("Decimals: {}", decimals);
     msg!("URI: {}", uri);
 
-    // Base mint creation logic
-    // The actual CPI calls will be implemented based on enabled extensions
+    let payer = &ctx.accounts.payer;
+    let mint = &ctx.accounts.mint;
+    let mint_authority = &ctx.accounts.mint_authority;
+    let token_program = &ctx.accounts.token_program;
+    let system_program = &ctx.accounts.system_program;
 
+    let mut extension_types = vec![ExtensionType::MetadataPointer];
+
+    // @wizard:inject.create_mint.extension_types
+    // @wizard:end
+
+    let mint_space = ExtensionType::try_calculate_account_len::<Mint>(&extension_types)
+        .map_err(|_| ErrorCode::AccountDidNotSerialize)?;
+
+    let metadata = TokenMetadata {
+        update_authority: Some(mint_authority.key())
+            .try_into()
+            .map_err(|_| ErrorCode::AccountDidNotSerialize)?,
+        mint: mint.key(),
+        name: name.clone(),
+        symbol: symbol.clone(),
+        uri: uri.clone(),
+        additional_metadata: vec![],
+    };
+    let metadata_space = metadata
+        .tlv_size_of()
+        .map_err(|_| ErrorCode::AccountDidNotSerialize)?;
+
+    let total_space = mint_space + metadata_space;
+    msg!(
+        "Allocating {} bytes (mint: {}, metadata: {})",
+        total_space,
+        mint_space,
+        metadata_space
+    );
+
+    let rent = Rent::get()?;
+    let lamports = rent.minimum_balance(total_space);
+
+    invoke(
+        &anchor_lang::solana_program::system_instruction::create_account(
+            payer.key,
+            mint.key,
+            lamports,
+            total_space as u64,
+            token_program.key,
+        ),
+        &[
+            payer.to_account_info(),
+            mint.to_account_info(),
+            system_program.to_account_info(),
+        ],
+    )?;
+    msg!("Mint account created");
+
+    invoke(
+        &metadata_pointer_instruction::initialize(
+            token_program.key,
+            mint.key,
+            Some(mint_authority.key()),
+            Some(mint.key()),
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("MetadataPointer initialized");
+
+    // @wizard:inject.create_mint.init_extensions
+    // @wizard:end
+
+    invoke(
+        &token_instruction::initialize_mint2(
+            token_program.key,
+            mint.key,
+            mint_authority.key,
+            None,
+            decimals,
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("Mint initialized with {} decimals", decimals);
+
+    invoke(
+        &metadata_instruction::initialize(
+            token_program.key,
+            mint.key,
+            mint_authority.key,
+            mint.key,
+            mint_authority.key,
+            name.clone(),
+            symbol.clone(),
+            uri.clone(),
+        ),
+        &[mint.to_account_info(), mint_authority.to_account_info()],
+    )?;
+    msg!("Metadata initialized: {} ({})", name, symbol);
+
+    // @wizard:inject.create_mint.body
+    // @wizard:end
+
+    msg!("Mint created successfully: {}", mint.key());
     Ok(())
 }
 
@@ -30,11 +141,12 @@ pub struct CreateMint<'info> {
     pub payer: Signer<'info>,
 
     /// CHECK: The mint account to be created
-    /// This will be initialized as a Token-2022 mint
+    /// This will be initialized as a Token-2022 mint with extensions
     #[account(mut)]
     pub mint: Signer<'info>,
 
     /// The mint authority that can mint new tokens
+    /// Also serves as the metadata update authority
     pub mint_authority: Signer<'info>,
 
     /// Token-2022 program

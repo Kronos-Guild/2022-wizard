@@ -1,9 +1,4 @@
 use anchor_lang::prelude::*;
-use spl_token_metadata_interface::state::TokenMetadata;
-
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
 
 // @wizard:inject.lib.modules
 pub mod metadata;
@@ -14,51 +9,51 @@ use crate::metadata;
 // @wizard:end
 
 // @wizard:inject.create_mint.body
-    // Initialize metadata extension
-    metadata::validate_metadata(&name, &symbol)?;
-    let _metadata = metadata::init_metadata(name.clone(), symbol.clone(), uri.clone())?;
-    msg!("Metadata extension initialized");
+    metadata::validate_metadata(&name, &symbol, &uri)?;
 // @wizard:end
 
-// =============================================================================
-// Extension Implementation
-// =============================================================================
+/// Maximum length for token name
+pub const MAX_NAME_LENGTH: usize = 32;
 
-/// Initialize metadata extension for the mint.
-///
-/// This adds on-chain metadata (name, symbol, uri) to the token using
-/// the Token-2022 metadata extension.
+/// Maximum length for token symbol
+pub const MAX_SYMBOL_LENGTH: usize = 10;
+
+/// Maximum length for metadata URI
+pub const MAX_URI_LENGTH: usize = 200;
+
+/// Validates metadata fields before mint creation.
 ///
 /// # Arguments
-/// * `name` - The token name
-/// * `symbol` - The token symbol  
-/// * `uri` - URI pointing to off-chain JSON metadata
-pub fn init_metadata(name: String, symbol: String, uri: String) -> Result<TokenMetadata> {
-    msg!("Initializing metadata extension");
-    msg!("  Name: {}", name);
-    msg!("  Symbol: {}", symbol);
-    msg!("  URI: {}", uri);
-
-    let metadata = TokenMetadata {
-        name,
-        symbol,
-        uri,
-        ..Default::default()
-    };
-
-    Ok(metadata)
-}
-
-/// Validates metadata fields
-pub fn validate_metadata(name: &str, symbol: &str) -> Result<()> {
+/// * `name` - Token name (1-32 characters)
+/// * `symbol` - Token symbol (1-10 characters)
+/// * `uri` - Metadata URI (1-200 characters)
+///
+/// # Errors
+/// Returns error if any field is empty or exceeds maximum length.
+pub fn validate_metadata(name: &str, symbol: &str, uri: &str) -> Result<()> {
+    // Validate name
     require!(
-        !name.is_empty() && name.len() <= 32,
+        !name.is_empty() && name.len() <= MAX_NAME_LENGTH,
         MetadataError::InvalidName
     );
+
+    // Validate symbol
     require!(
-        !symbol.is_empty() && symbol.len() <= 10,
+        !symbol.is_empty() && symbol.len() <= MAX_SYMBOL_LENGTH,
         MetadataError::InvalidSymbol
     );
+
+    // Validate URI
+    require!(
+        !uri.is_empty() && uri.len() <= MAX_URI_LENGTH,
+        MetadataError::InvalidUri
+    );
+
+    msg!("Metadata validation passed");
+    msg!("  Name: {} ({} chars)", name, name.len());
+    msg!("  Symbol: {} ({} chars)", symbol, symbol.len());
+    msg!("  URI: {} chars", uri.len());
+
     Ok(())
 }
 
@@ -69,4 +64,7 @@ pub enum MetadataError {
 
     #[msg("Token symbol must be 1-10 characters")]
     InvalidSymbol,
+
+    #[msg("Token URI must be 1-200 characters")]
+    InvalidUri,
 }

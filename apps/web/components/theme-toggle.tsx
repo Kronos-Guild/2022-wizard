@@ -1,17 +1,17 @@
 "use client"
 
 import { useTheme } from "next-themes"
-import { useEffect, useState } from "react"
+import { useSyncExternalStore } from "react"
 import { SunMoonIcon } from "@/components/ui/sun-moon"
 import { Button } from "@/components/ui/button"
 
+// Safe way to check if component is mounted without triggering cascading renders
+const emptySubscribe = () => () => {}
+const useIsMounted = () => useSyncExternalStore(emptySubscribe, () => true, () => false)
+
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  const mounted = useIsMounted()
 
   if (!mounted) {
     return (

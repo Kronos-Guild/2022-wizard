@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 
 // Regex patterns for syntax highlighting (extracted to avoid recreation on each render)
@@ -98,7 +98,7 @@ const CODE_STATES = [
   },
 ]
 
-function highlightLine(content: string, isNew: boolean): React.ReactNode {
+function highlightLine(content: string): React.ReactNode {
   if (!content) return "\u00A0"
 
   const tokens: React.ReactNode[] = []
@@ -224,19 +224,18 @@ function highlightLine(content: string, isNew: boolean): React.ReactNode {
 
 export function CodeEditorMock() {
   const [currentState, setCurrentState] = useState(0)
-  // Use ref to track previous state to avoid re-renders and stale closures
-  const prevStateRef = useRef(0)
+  const [prevState, setPrevState] = useState(0)
 
   useEffect(() => {
     const interval = setInterval(() => {
-      prevStateRef.current = currentState
+      setPrevState(currentState)
       setCurrentState((prev) => (prev + 1) % CODE_STATES.length)
     }, 4000)
     return () => clearInterval(interval)
   }, [currentState])
 
   const currentCode = CODE_STATES[currentState]
-  const prevIds = new Set(CODE_STATES[prevStateRef.current].lines.map((l) => l.id))
+  const prevIds = new Set(CODE_STATES[prevState].lines.map((l) => l.id))
 
   return (
     <div className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.02] dark:bg-foreground/[0.03] overflow-hidden shadow-sm">
@@ -287,7 +286,7 @@ export function CodeEditorMock() {
                     }}
                     className="leading-relaxed rounded"
                   >
-                    {highlightLine(line.content, isNew)}
+                    {highlightLine(line.content)}
                   </motion.div>
                 )
               })}
@@ -302,7 +301,7 @@ export function CodeEditorMock() {
           <button
             key={state.label}
             onClick={() => {
-              prevStateRef.current = currentState
+              setPrevState(currentState)
               setCurrentState(index)
             }}
             className={`h-1.5 rounded-full transition-all duration-300 ${

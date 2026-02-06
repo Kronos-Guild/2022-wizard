@@ -1,6 +1,5 @@
 import type { WizardState, ExtensionState } from "@/lib/wizard/types";
 import {
-  baseFiles,
   extensions,
   programInfo,
   assembleLib,
@@ -50,30 +49,6 @@ function toPascalCase(str: string): string {
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join("");
-}
-
-/**
- * Generates an Anchor.toml configuration file.
- */
-function generateAnchorToml(state: WizardState): string {
-  const programName = toSnakeCase(state.name);
-  return `[features]
-seeds = false
-skip-lint = false
-
-[programs.${state.cluster}]
-${programName} = "11111111111111111111111111111111"
-
-[registry]
-url = "https://api.apr.dev"
-
-[provider]
-cluster = "${state.cluster}"
-wallet = "~/.config/solana/id.json"
-
-[scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
-`;
 }
 
 /**

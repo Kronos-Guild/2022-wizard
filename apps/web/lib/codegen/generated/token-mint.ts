@@ -888,7 +888,7 @@ export function assembleLib(enabledExtensions: ExtensionId[], programName?: stri
 export function assembleInstruction(
   instructionId: string,
   enabledExtensions: ExtensionId[],
-  extensionConfigs?: Record<string, Record<string, unknown>>
+  _extensionConfigs?: Record<string, Record<string, unknown>>
 ): string {
   const baseCode = baseFiles.instructions[instructionId as keyof typeof baseFiles.instructions];
   if (!baseCode) {

@@ -85,6 +85,26 @@ export const SettingsPanel = memo(function SettingsPanel({
     [onMaxFeeChange]
   );
 
+  // Memoized RadioGroup handlers to prevent re-renders
+  const handleAuthorityChange = useCallback(
+    (value: string) => onAuthorityChange(value as WizardState["authority"]),
+    [onAuthorityChange]
+  );
+  const handleClusterChange = useCallback(
+    (value: string) => onClusterChange(value as WizardState["cluster"]),
+    [onClusterChange]
+  );
+
+  // Memoized extension toggle handlers
+  const handleCloseMintToggle = useCallback(
+    () => onCloseMintChange(!state.extensions.closeMint),
+    [onCloseMintChange, state.extensions.closeMint]
+  );
+  const handleNonTransferableToggle = useCallback(
+    () => onNonTransferableChange(!state.extensions.nonTransferable),
+    [onNonTransferableChange, state.extensions.nonTransferable]
+  );
+
   return (
     <div className="scrollbar-subtle flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto py-6 px-3">
       {/* Token Basics */}
@@ -130,9 +150,7 @@ export const SettingsPanel = memo(function SettingsPanel({
         <p className={SECTION_LABEL}>Mint Authority</p>
         <RadioGroup
           value={state.authority}
-          onValueChange={(value) =>
-            onAuthorityChange(value as WizardState["authority"])
-          }
+          onValueChange={handleAuthorityChange}
           className="mt-3"
         >
           <div className="flex items-center gap-3 rounded-lg border border-input px-3 py-2.5">
@@ -155,9 +173,7 @@ export const SettingsPanel = memo(function SettingsPanel({
         <p className={SECTION_LABEL}>Cluster</p>
         <RadioGroup
           value={state.cluster}
-          onValueChange={(value) =>
-            onClusterChange(value as WizardState["cluster"])
-          }
+          onValueChange={handleClusterChange}
           className="mt-3"
         >
           <div className="flex items-center gap-3 rounded-lg border border-input px-3 py-2.5">
@@ -189,7 +205,7 @@ export const SettingsPanel = memo(function SettingsPanel({
           <ExtensionPill
             label="Close Mint"
             active={state.extensions.closeMint}
-            onToggle={() => onCloseMintChange(!state.extensions.closeMint)}
+            onToggle={handleCloseMintToggle}
           />
           <ExtensionPill
             label="Non-Transferable"
@@ -200,9 +216,7 @@ export const SettingsPanel = memo(function SettingsPanel({
                 ? "Disable Transfer Fee first"
                 : undefined
             }
-            onToggle={() =>
-              onNonTransferableChange(!state.extensions.nonTransferable)
-            }
+            onToggle={handleNonTransferableToggle}
           />
           <ExtensionPill
             label="Transfer Fee"

@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import { useMemo, useState, useRef, useEffect, memo } from "react";
 import dynamic from "next/dynamic";
 import type { HTMLMotionProps } from "framer-motion";
 import type { WizardState } from "@/lib/wizard/types";
-import { generateCode, type GeneratedFile } from "@/lib/codegen";
+import { generateCode } from "@/lib/codegen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -41,17 +41,6 @@ interface CodePreviewProps {
 
 type ChangeType = "added" | "removed";
 
-interface LineChange {
-  lineIndex: number;
-  type: ChangeType;
-  content: string;
-}
-
-interface FileChanges {
-  type: ChangeType; // Overall change type for the file (for pulse color)
-  lines: Map<number, ChangeType>; // Line index -> change type
-}
-
 // Track pulse animations with unique keys to handle rapid changes
 interface PulseAnimation {
   key: number;
@@ -70,7 +59,9 @@ export function CodePreview({ state }: CodePreviewProps) {
   const pulseKeyRef = useRef(0);
 
   // Detect file changes and track which lines changed (added vs removed)
+  // This effect intentionally sets state to trigger animations when files change
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     const newPulses = new Map<string, PulseAnimation>();
     const newChangedLines = new Map<string, Map<number, ChangeType>>();
 
@@ -160,6 +151,7 @@ export function CodePreview({ state }: CodePreviewProps) {
         clearTimeout(lineTimeout);
       };
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [files]);
 
   const activeFile = files.find((f) => f.id === activeFileId) ?? files[0];
@@ -280,12 +272,15 @@ interface HighlightedCodeProps {
   changedLines: Map<number, ChangeType>;
 }
 
-function HighlightedCode({ code, changedLines }: HighlightedCodeProps) {
-  const lines = code.split("\n");
+const HighlightedCode = memo(function HighlightedCode({ code, changedLines }: HighlightedCodeProps) {
+  // Memoize highlighted lines to avoid re-tokenizing on every render
+  const highlightedLines = useMemo(() => {
+    return code.split("\n").map(highlightLine);
+  }, [code]);
 
   return (
     <>
-      {lines.map((line, i) => {
+      {highlightedLines.map((tokens, i) => {
         const changeType = changedLines.get(i);
         
         return (
@@ -310,13 +305,13 @@ function HighlightedCode({ code, changedLines }: HighlightedCodeProps) {
                 />
               )}
             </AnimatePresence>
-            <span className="relative">{highlightLine(line)}</span>
+            <span className="relative">{tokens}</span>
           </div>
         );
       })}
     </>
   );
-}
+});
 
 function highlightLine(line: string): React.ReactNode {
   if (!line) return "\u00A0";

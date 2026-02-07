@@ -106,6 +106,8 @@ Instead of declaring injections in `template.toml`, use `@wizard` marker comment
 | `instructions` | lib | New instruction function in `#[program]` module |
 | `imports` | instruction | Use statements |
 | `args` | instruction | Function parameters (also added to `#[instruction]`) |
+| `extension_types` | instruction | Extension type registration (e.g., `extension_types.push(...)`) |
+| `init_extensions` | instruction | Extension initialization CPIs (before mint init) |
 | `body` | instruction | Code injected before `Ok(())` |
 | `accounts` | instruction | Account fields in Accounts struct |
 
@@ -144,12 +146,31 @@ use crate::transfer_fee;
 // @wizard:inject.create_mint.args fee_basis_points: u16, max_fee: u64
 ```
 
+**Extension types** (register extension type for space calculation):
+```rust
+// @wizard:inject.create_mint.extension_types
+    extension_types.push(ExtensionType::TransferFeeConfig);
+// @wizard:end
+```
+
+**Init extensions** (initialize extension before mint init):
+```rust
+// @wizard:inject.create_mint.init_extensions
+    invoke(
+        &transfer_fee_ix::initialize_transfer_fee_config(
+            token_program.key, mint.key,
+            Some(&fee_authority.key()), Some(&fee_authority.key()),
+            fee_basis_points, max_fee,
+        )?,
+        &[mint.to_account_info()],
+    )?;
+// @wizard:end
+```
+
 **Body code** (injected before `Ok(())`):
 ```rust
 // @wizard:inject.create_mint.body
-    // Initialize transfer fee extension
-    let _fee_config = transfer_fee::init_transfer_fee(fee_basis_points, max_fee)?;
-    msg!("Transfer fee initialized");
+    metadata::validate_metadata(&name, &symbol, &uri)?;
 // @wizard:end
 ```
 
@@ -171,6 +192,8 @@ The assembly functions inject code at specific locations in base files:
 | `instructions` | lib.rs | After the `create_mint` function body |
 | `imports` | instruction files | After `use anchor_spl::token_2022::Token2022;` |
 | `args` | instruction files | Added to function params and `#[instruction]` macro |
+| `extension_types` | instruction files | After `extension_types` vector declaration |
+| `init_extensions` | instruction files | After MetadataPointer init, before mint init |
 | `body` | instruction files | Before final `Ok(())` |
 | `accounts` | instruction files | Before closing `}` of Accounts struct |
 

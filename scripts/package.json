@@ -7,7 +7,8 @@
     "extract-templates": "tsx extract-templates.ts",
     "validate-templates": "tsx extract-templates.ts --validate",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "compile-check": "tsx compile-check.ts"
   },
   "dependencies": {
     "toml": "^3.0.0"

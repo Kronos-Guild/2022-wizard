@@ -474,6 +474,8 @@ export interface InstructionInjection {
   args?: string[];
   body?: string;
   accounts?: string;
+  extension_types?: string;
+  init_extensions?: string;
 }
 
 export interface Extension {
@@ -526,6 +528,8 @@ ${Object.entries(inject)
         args: ${injection.args ? JSON.stringify(injection.args) : "undefined"},
         body: ${injection.body ? `\`${escapeForTemplate(injection.body)}\`` : "undefined"},
         accounts: ${injection.accounts ? `\`${escapeForTemplate(injection.accounts)}\`` : "undefined"},
+        extension_types: ${injection.extension_types ? `\`${escapeForTemplate(injection.extension_types)}\`` : "undefined"},
+        init_extensions: ${injection.init_extensions ? `\`${escapeForTemplate(injection.init_extensions)}\`` : "undefined"},
       },`;
   })
   .join("\n")}
@@ -545,6 +549,31 @@ export type ExtensionId = keyof typeof extensions;
 // =============================================================================
 // Code Assembly Functions
 // =============================================================================
+
+/**
+ * Replaces a marker block (// @wizard:inject.X.Y ... // @wizard:end) with replacement content.
+ * Used to inject extension code at specific marker positions in base templates.
+ */
+function replaceMarkerBlock(code: string, markerType: string, replacement: string): string {
+  const lines = code.split("\\n");
+  const result: string[] = [];
+  let skipping = false;
+  for (const line of lines) {
+    if (line.includes("@wizard:inject.") && line.includes("." + markerType)) {
+      skipping = true;
+      result.push(replacement);
+      continue;
+    }
+    if (skipping && line.trim() === "// @wizard:end") {
+      skipping = false;
+      continue;
+    }
+    if (!skipping) {
+      result.push(line);
+    }
+  }
+  return result.join("\\n");
+}
 
 /**
  * Strips all @wizard marker comments from the code.
@@ -574,9 +603,10 @@ export function assembleLib(enabledExtensions: ExtensionId[], programName?: stri
     code = code.replace(/pub mod token_mint/, \`pub mod \${programName}\`);
   }
 
-  // Collect all module declarations and instructions to inject
+  // Collect all module declarations, instructions, and args to inject
   const modules: string[] = [];
   const instructions: string[] = [];
+  const args: string[] = [];
 
   for (const extId of enabledExtensions) {
     const ext = extensions[extId];
@@ -588,6 +618,14 @@ export function assembleLib(enabledExtensions: ExtensionId[], programName?: stri
         instructions.push(ext.inject.lib.instructions);
       }
     }
+    // Collect args from instruction injections (e.g., create_mint args)
+    for (const [target, injection] of Object.entries(ext?.inject ?? {})) {
+      if (target === "lib") continue;
+      const instrInj = injection as InstructionInjection | undefined;
+      if (instrInj?.args) {
+        args.push(...instrInj.args);
+      }
+    }
   }
 
   // Inject modules after the last "pub mod" line
@@ -597,6 +635,22 @@ export function assembleLib(enabledExtensions: ExtensionId[], programName?: stri
     code = code.replace(
       /(pub mod error;)/,
       \`$1\\n\\n// Extension modules\\n\${moduleLines}\`
+    );
+  }
+
+  // Inject extension args into create_mint function signature and forwarding call
+  if (args.length > 0) {
+    const argsStr = args.join(",\\n        ");
+    // Add args to function signature
+    code = code.replace(
+      /(pub fn create_mint\\([^)]*decimals: u8,)\\n(\\s*\\) -> Result<\\(\\)>)/,
+      \`$1\\n        // Extension arguments\\n        \${argsStr},\\n    ) -> Result<()>\`
+    );
+    // Add arg names to the handler forwarding call
+    const argNames = args.map(a => a.split(":")[0].trim()).join(", ");
+    code = code.replace(
+      /(instructions::create_mint::handler\\(ctx, name, symbol, uri, decimals)(\\))/,
+      \`$1, \${argNames})\`
     );
   }
 
@@ -636,6 +690,8 @@ export function assembleInstruction(
   const args: string[] = [];
   const bodyParts: string[] = [];
   const accounts: string[] = [];
+  const extensionTypes: string[] = [];
+  const initExtensions: string[] = [];
 
   for (const extId of enabledExtensions) {
     const ext = extensions[extId];
@@ -645,6 +701,8 @@ export function assembleInstruction(
       if (injection.args) args.push(...injection.args);
       if (injection.body) bodyParts.push(injection.body);
       if (injection.accounts) accounts.push(injection.accounts);
+      if (injection.extension_types) extensionTypes.push(injection.extension_types);
+      if (injection.init_extensions) initExtensions.push(injection.init_extensions);
     }
   }
 
@@ -665,8 +723,8 @@ export function assembleInstruction(
       /decimals: u8,\\n\\) -> Result<\\(\\)>/,
       \`decimals: u8,\\n    // Extension arguments\\n    \${argsStr},\\n) -> Result<()>\`
     );
-    // Add to #[instruction] macro
-    const instrArgs = args.map(a => a.split(":")[0].trim()).join(", ");
+    // Add to #[instruction] macro (with types, e.g. "fee_basis_points: u16, max_fee: u64")
+    const instrArgs = args.join(", ");
     code = code.replace(
       /(#\\[instruction\\([^)]+)(\\)\\])/,
       \`$1, \${instrArgs}$2\`
@@ -689,6 +747,18 @@ export function assembleInstruction(
       /(pub system_program: Program<'info, System>,\\n})/,
       \`pub system_program: Program<'info, System>,\\n\\n    // Extension accounts\\n\${accountsCode}\\n}\`
     );
+  }
+
+  // Inject extension_types at marker position in base template
+  if (extensionTypes.length > 0) {
+    const typesCode = extensionTypes.join("\\n");
+    code = replaceMarkerBlock(code, "extension_types", typesCode);
+  }
+
+  // Inject init_extensions at marker position in base template
+  if (initExtensions.length > 0) {
+    const initCode = initExtensions.join("\\n");
+    code = replaceMarkerBlock(code, "init_extensions", initCode);
   }
 
   // Strip any remaining marker comments

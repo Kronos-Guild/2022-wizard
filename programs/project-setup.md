@@ -67,8 +67,12 @@ anchor-spl = "0.32.1"
 spl-token-2022 = "8"
 
 # For metadata extension
-spl-token-metadata-interface = "0.8.0"
-spl-type-length-value = "0.8.0"
+# Pin to 0.7 to avoid solana-instruction v3 conflict with anchor-spl 0.32.1
+spl-token-metadata-interface = "0.7"
+spl-type-length-value = "0.8"
+
+# Pin blake3 to avoid edition2024 (unsupported by Solana SBF toolchain Cargo 1.84)
+blake3 = "=1.8.2"
 ```
 
 ### Cargo.toml (workspace root)
@@ -280,10 +284,6 @@ pub mod instructions;
 pub mod state;
 pub mod error;
 
-// @wizard:inject.lib.modules
-// Extensions add their modules here
-// @wizard:end
-
 use instructions::*;
 
 #[program]
@@ -291,23 +291,26 @@ pub mod token_mint {
     use super::*;
 
     /// Creates a new Token-2022 mint with the specified configuration.
+    ///
+    /// # Arguments
+    /// * `ctx` - The context containing all accounts needed for mint creation
+    /// * `name` - The token name (for metadata)
+    /// * `symbol` - The token symbol (for metadata)
+    /// * `uri` - The metadata URI pointing to off-chain JSON
+    /// * `decimals` - Number of decimal places for the token
     pub fn create_mint(
         ctx: Context<CreateMint>,
         name: String,
         symbol: String,
         uri: String,
         decimals: u8,
-        // @wizard:inject.create_mint.args
-        // @wizard:end
     ) -> Result<()> {
         instructions::create_mint::handler(ctx, name, symbol, uri, decimals)
     }
-
-    // @wizard:inject.lib.instructions
-    // Extensions add their instruction handlers here
-    // @wizard:end
 }
 ```
+
+> **Note**: The base `lib.rs` has no injection markers. The wizard system injects extension modules and instructions at code generation time by appending them at the appropriate locations.
 
 ### src/instructions/mod.rs
 
@@ -328,24 +331,29 @@ use spl_token_2022::{
     instruction as token_instruction,
     state::Mint,
 };
-use spl_token_metadata_interface::{
-    instruction as metadata_instruction,
-    state::TokenMetadata,
-};
+use spl_token_metadata_interface::{instruction as metadata_instruction, state::TokenMetadata};
 
-// @wizard:inject.create_mint.imports
-// Extensions add their imports here
-// @wizard:end
-
+/// Creates a new Token-2022 mint with metadata extension.
+///
+/// This is the base instruction that creates a mint account with on-chain metadata.
+/// The mint is created with MetadataPointer and TokenMetadata extensions.
+/// Additional extensions can be enabled via the wizard.
+///
+/// # Arguments
+/// * `name` - Token name (1-32 characters)
+/// * `symbol` - Token symbol (1-10 characters)
+/// * `uri` - URI pointing to off-chain JSON metadata
+/// * `decimals` - Number of decimal places (0-9 typically)
 pub fn handler(
     ctx: Context<CreateMint>,
     name: String,
     symbol: String,
     uri: String,
     decimals: u8,
-    // @wizard:inject.create_mint.args (inline)
 ) -> Result<()> {
     msg!("Creating Token-2022 mint: {} ({})", name, symbol);
+    msg!("Decimals: {}", decimals);
+    msg!("URI: {}", uri);
 
     let payer = &ctx.accounts.payer;
     let mint = &ctx.accounts.mint;
@@ -353,23 +361,20 @@ pub fn handler(
     let token_program = &ctx.accounts.token_program;
     let system_program = &ctx.accounts.system_program;
 
-    // =========================================================================
-    // STEP 1: Build extension types list
-    // =========================================================================
+    // @wizard:inject.create_mint.body
+    // @wizard:end
+
     let mut extension_types = vec![ExtensionType::MetadataPointer];
 
     // @wizard:inject.create_mint.extension_types
-    // Extensions add their types here
     // @wizard:end
 
-    // =========================================================================
-    // STEP 2: Calculate space
-    // =========================================================================
     let mint_space = ExtensionType::try_calculate_account_len::<Mint>(&extension_types)
         .map_err(|_| ErrorCode::AccountDidNotSerialize)?;
 
     let metadata = TokenMetadata {
-        update_authority: Some(mint_authority.key()).try_into()
+        update_authority: Some(mint_authority.key())
+            .try_into()
             .map_err(|_| ErrorCode::AccountDidNotSerialize)?,
         mint: mint.key(),
         name: name.clone(),
@@ -377,15 +382,18 @@ pub fn handler(
         uri: uri.clone(),
         additional_metadata: vec![],
     };
-    let metadata_space = metadata.tlv_size_of()
+    let metadata_space = metadata
+        .tlv_size_of()
         .map_err(|_| ErrorCode::AccountDidNotSerialize)?;
 
     let total_space = mint_space + metadata_space;
-    msg!("Allocating {} bytes (mint: {}, metadata: {})", total_space, mint_space, metadata_space);
+    msg!(
+        "Allocating {} bytes (mint: {}, metadata: {})",
+        total_space,
+        mint_space,
+        metadata_space
+    );
 
-    // =========================================================================
-    // STEP 3: Create mint account
-    // =========================================================================
     let rent = Rent::get()?;
     let lamports = rent.minimum_balance(total_space);
 
@@ -405,11 +413,6 @@ pub fn handler(
     )?;
     msg!("Mint account created");
 
-    // =========================================================================
-    // STEP 4: Initialize extensions (BEFORE mint initialization)
-    // =========================================================================
-
-    // 4a. Initialize MetadataPointer (always)
     invoke(
         &metadata_pointer_instruction::initialize(
             token_program.key,
@@ -422,27 +425,20 @@ pub fn handler(
     msg!("MetadataPointer initialized");
 
     // @wizard:inject.create_mint.init_extensions
-    // Extensions initialize here (BEFORE mint init)
     // @wizard:end
 
-    // =========================================================================
-    // STEP 5: Initialize the mint
-    // =========================================================================
     invoke(
         &token_instruction::initialize_mint2(
             token_program.key,
             mint.key,
             mint_authority.key,
-            None, // freeze authority
+            None,
             decimals,
         )?,
         &[mint.to_account_info()],
     )?;
     msg!("Mint initialized with {} decimals", decimals);
 
-    // =========================================================================
-    // STEP 6: Initialize TokenMetadata (AFTER mint initialization)
-    // =========================================================================
     invoke(
         &metadata_instruction::initialize(
             token_program.key,
@@ -454,16 +450,9 @@ pub fn handler(
             symbol.clone(),
             uri.clone(),
         ),
-        &[
-            mint.to_account_info(),
-            mint_authority.to_account_info(),
-        ],
+        &[mint.to_account_info(), mint_authority.to_account_info()],
     )?;
     msg!("Metadata initialized: {} ({})", name, symbol);
-
-    // @wizard:inject.create_mint.body
-    // Additional extension logic (post-mint initialization)
-    // @wizard:end
 
     msg!("Mint created successfully: {}", mint.key());
     Ok(())
@@ -472,28 +461,36 @@ pub fn handler(
 #[derive(Accounts)]
 #[instruction(name: String, symbol: String, uri: String, decimals: u8)]
 pub struct CreateMint<'info> {
+    /// The account paying for rent and transaction fees
     #[account(mut)]
     pub payer: Signer<'info>,
 
     /// CHECK: The mint account to be created
+    /// This will be initialized as a Token-2022 mint with extensions
     #[account(mut)]
     pub mint: Signer<'info>,
 
+    /// The mint authority that can mint new tokens
+    /// Also serves as the metadata update authority
     pub mint_authority: Signer<'info>,
 
-    // @wizard:inject.create_mint.accounts
-    // Extensions add their accounts here
-    // @wizard:end
-
+    /// Token-2022 program
     pub token_program: Program<'info, Token2022>,
+
+    /// System program for account creation
     pub system_program: Program<'info, System>,
 }
 ```
 
+> **Marker positions**: The `body` marker is placed immediately after account variable declarations (before any CPIs), so that injected validation code (like `metadata::validate_metadata()`) runs before on-chain writes. The `init_extensions` marker is between MetadataPointer initialization and `initialize_mint2`, and `extension_types` is right after the base extension list.
+
 ### src/state/mod.rs
 
 ```rust
-pub const MINT_AUTHORITY_SEED: &[u8] = b"mint_authority";
+/// State module for Token Mint program
+///
+/// Add any program state structs here.
+/// These are typically PDA accounts that store program configuration.
 ```
 
 ### src/error.rs
@@ -501,18 +498,16 @@ pub const MINT_AUTHORITY_SEED: &[u8] = b"mint_authority";
 ```rust
 use anchor_lang::prelude::*;
 
+/// Custom errors for the Token Mint program
 #[error_code]
 pub enum TokenMintError {
+    /// The caller is not authorized to perform this action
     #[msg("Unauthorized access")]
     Unauthorized,
-    #[msg("Invalid token name")]
-    InvalidName,
-    #[msg("Invalid token symbol")]
-    InvalidSymbol,
-    #[msg("Invalid decimals value")]
-    InvalidDecimals,
 }
 ```
+
+> **Note**: Validation errors (InvalidName, InvalidSymbol, etc.) are defined in the metadata extension's own error enum, not here.
 
 ---
 
@@ -520,14 +515,10 @@ pub enum TokenMintError {
 
 ### Metadata Extension (Locked - Always Included)
 
-**src/metadata.rs**
+**src/metadata.rs** (`extensions/metadata/mod.rs`)
 
 ```rust
 use anchor_lang::prelude::*;
-
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
 
 // @wizard:inject.lib.modules
 pub mod metadata;
@@ -541,28 +532,48 @@ use crate::metadata;
     metadata::validate_metadata(&name, &symbol, &uri)?;
 // @wizard:end
 
-// =============================================================================
-// Extension Implementation
-// =============================================================================
-
+/// Maximum length for token name
 pub const MAX_NAME_LENGTH: usize = 32;
+
+/// Maximum length for token symbol
 pub const MAX_SYMBOL_LENGTH: usize = 10;
+
+/// Maximum length for metadata URI
 pub const MAX_URI_LENGTH: usize = 200;
 
+/// Validates metadata fields before mint creation.
+///
+/// # Arguments
+/// * `name` - Token name (1-32 characters)
+/// * `symbol` - Token symbol (1-10 characters)
+/// * `uri` - Metadata URI (1-200 characters)
+///
+/// # Errors
+/// Returns error if any field is empty or exceeds maximum length.
 pub fn validate_metadata(name: &str, symbol: &str, uri: &str) -> Result<()> {
+    // Validate name
     require!(
         !name.is_empty() && name.len() <= MAX_NAME_LENGTH,
         MetadataError::InvalidName
     );
+
+    // Validate symbol
     require!(
         !symbol.is_empty() && symbol.len() <= MAX_SYMBOL_LENGTH,
         MetadataError::InvalidSymbol
     );
+
+    // Validate URI
     require!(
         !uri.is_empty() && uri.len() <= MAX_URI_LENGTH,
         MetadataError::InvalidUri
     );
+
     msg!("Metadata validation passed");
+    msg!("  Name: {} ({} chars)", name, name.len());
+    msg!("  Symbol: {} ({} chars)", symbol, symbol.len());
+    msg!("  URI: {} chars", uri.len());
+
     Ok(())
 }
 
@@ -570,8 +581,10 @@ pub fn validate_metadata(name: &str, symbol: &str, uri: &str) -> Result<()> {
 pub enum MetadataError {
     #[msg("Token name must be 1-32 characters")]
     InvalidName,
+
     #[msg("Token symbol must be 1-10 characters")]
     InvalidSymbol,
+
     #[msg("Token URI must be 1-200 characters")]
     InvalidUri,
 }
@@ -581,32 +594,21 @@ pub enum MetadataError {
 
 ### Transfer Fee Extension
 
-**src/transfer_fee.rs**
+This extension spans two files: `mod.rs` (injection markers + validation) and `update_fee.rs` (update instruction).
+
+**src/transfer_fee.rs** (`extensions/transfer-fee/mod.rs`)
 
 ```rust
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
-use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_instruction;
+use spl_token_2022::extension::{transfer_fee::instruction as transfer_fee_instruction, ExtensionType};
 
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
+pub mod update_fee;
 
 // @wizard:inject.lib.modules
 pub mod transfer_fee;
-// @wizard:end
-
-// @wizard:inject.lib.instructions
-
-    /// Updates the transfer fee configuration.
-    pub fn update_transfer_fee(
-        ctx: Context<UpdateTransferFee>,
-        fee_basis_points: u16,
-        max_fee: u64,
-    ) -> Result<()> {
-        transfer_fee::update_fee_handler(ctx, fee_basis_points, max_fee)
-    }
+pub use transfer_fee::update_fee::*;
 // @wizard:end
 
 // @wizard:inject.create_mint.imports
@@ -626,8 +628,8 @@ use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_ix;
         &transfer_fee_ix::initialize_transfer_fee_config(
             token_program.key,
             mint.key,
-            Some(&ctx.accounts.fee_authority.key()),
-            Some(&ctx.accounts.fee_authority.key()),
+            Some(&ctx.accounts.fee_authority.key()),  // transfer_fee_config_authority
+            Some(&ctx.accounts.fee_authority.key()),  // withdraw_withheld_authority
             fee_basis_points,
             max_fee,
         )?,
@@ -641,37 +643,99 @@ use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_ix;
     pub fee_authority: Signer<'info>,
 // @wizard:end
 
-// =============================================================================
-// Extension Implementation
-// =============================================================================
-
+/// Maximum allowed transfer fee in basis points (100% = 10000 bps)
 pub const MAX_FEE_BASIS_POINTS: u16 = 10000;
 
+/// Validates transfer fee configuration
 pub fn validate_fee_config(fee_basis_points: u16, max_fee: u64) -> Result<()> {
     require!(
         fee_basis_points <= MAX_FEE_BASIS_POINTS,
         TransferFeeError::FeeTooHigh
     );
-    msg!("Transfer fee config: {} bps, max {} tokens", fee_basis_points, max_fee);
+    msg!("Transfer fee config validated: {} bps, max {} tokens", fee_basis_points, max_fee);
     Ok(())
 }
 
-pub fn update_fee_handler(
+/// Configuration for the transfer fee extension (for reference/calculation)
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct TransferFeeConfig {
+    pub fee_basis_points: u16,
+    pub max_fee: u64,
+}
+
+impl TransferFeeConfig {
+    pub fn new(fee_basis_points: u16, max_fee: u64) -> Result<Self> {
+        require!(fee_basis_points <= MAX_FEE_BASIS_POINTS, TransferFeeError::FeeTooHigh);
+        Ok(Self { fee_basis_points, max_fee })
+    }
+
+    /// Calculates the fee for a given transfer amount
+    pub fn calculate_fee(&self, amount: u64) -> u64 {
+        let fee = (amount as u128)
+            .checked_mul(self.fee_basis_points as u128)
+            .unwrap_or(0)
+            .checked_div(10000)
+            .unwrap_or(0) as u64;
+        std::cmp::min(fee, self.max_fee)
+    }
+}
+
+#[error_code]
+pub enum TransferFeeError {
+    #[msg("Transfer fee exceeds maximum allowed (10000 basis points)")]
+    FeeTooHigh,
+
+    #[msg("Invalid fee configuration")]
+    InvalidFeeConfig,
+}
+```
+
+**src/transfer_fee/update_fee.rs** (`extensions/transfer-fee/update_fee.rs`)
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
+use anchor_spl::token_2022::Token2022;
+use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_instruction;
+
+use super::{TransferFeeError, MAX_FEE_BASIS_POINTS};
+
+// @wizard:inject.lib.instructions
+
+/// Updates the transfer fee configuration.
+/// Only the fee authority can call this.
+pub fn update_transfer_fee(
     ctx: Context<UpdateTransferFee>,
     fee_basis_points: u16,
     max_fee: u64,
 ) -> Result<()> {
+    transfer_fee::update_fee::handler(ctx, fee_basis_points, max_fee)
+}
+// @wizard:end
+
+/// Updates the transfer fee configuration for a mint.
+///
+/// Only the fee authority can update the fee.
+/// Changes take effect on all subsequent transfers.
+pub fn handler(ctx: Context<UpdateTransferFee>, fee_basis_points: u16, max_fee: u64) -> Result<()> {
     require!(
         fee_basis_points <= MAX_FEE_BASIS_POINTS,
         TransferFeeError::FeeTooHigh
     );
 
+    msg!(
+        "Updating transfer fee to {} bps, max {}",
+        fee_basis_points,
+        max_fee
+    );
+
+    // Update fee configuration via CPI to Token-2022 program
     invoke(
         &transfer_fee_instruction::set_transfer_fee(
             ctx.accounts.token_program.key,
             ctx.accounts.mint.key,
             ctx.accounts.fee_authority.key,
-            &[],
+            &[], // No multisig signers
             fee_basis_points,
             max_fee,
         )?,
@@ -681,25 +745,22 @@ pub fn update_fee_handler(
         ],
     )?;
 
-    msg!("Transfer fee updated: {} bps, max {}", fee_basis_points, max_fee);
+    msg!("Transfer fee updated successfully");
     Ok(())
 }
 
 #[derive(Accounts)]
 pub struct UpdateTransferFee<'info> {
+    /// The mint account with transfer fee extension
     /// CHECK: Validated by Token-2022 program
     #[account(mut)]
     pub mint: AccountInfo<'info>,
-    pub fee_authority: Signer<'info>,
-    pub token_program: Program<'info, Token2022>,
-}
 
-#[error_code]
-pub enum TransferFeeError {
-    #[msg("Transfer fee exceeds maximum (10000 basis points)")]
-    FeeTooHigh,
-    #[msg("Invalid fee configuration")]
-    InvalidFeeConfig,
+    /// The fee authority that can update the fee
+    pub fee_authority: Signer<'info>,
+
+    /// Token-2022 program
+    pub token_program: Program<'info, Token2022>,
 }
 ```
 
@@ -707,25 +768,26 @@ pub enum TransferFeeError {
 
 ### Close Mint Extension
 
-**src/close_mint.rs**
+**src/close_mint.rs** (`extensions/close-mint/mod.rs`)
 
 ```rust
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
-use spl_token_2022::instruction as token_instruction;
-
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
+use spl_token_2022::{
+    extension::ExtensionType,
+    instruction as token_instruction,
+};
 
 // @wizard:inject.lib.modules
 pub mod close_mint;
+pub use close_mint::*;
 // @wizard:end
 
 // @wizard:inject.lib.instructions
 
     /// Closes the mint account and returns rent to the destination.
+    /// Requires total supply to be 0.
     pub fn close_mint(ctx: Context<CloseMint>) -> Result<()> {
         close_mint::handler(ctx)
     }
@@ -733,7 +795,6 @@ pub mod close_mint;
 
 // @wizard:inject.create_mint.imports
 use crate::close_mint;
-use spl_token_2022::extension::mint_close_authority::instruction as close_authority_ix;
 // @wizard:end
 
 // @wizard:inject.create_mint.extension_types
@@ -742,7 +803,7 @@ use spl_token_2022::extension::mint_close_authority::instruction as close_author
 
 // @wizard:inject.create_mint.init_extensions
     invoke(
-        &close_authority_ix::initialize_mint_close_authority(
+        &token_instruction::initialize_mint_close_authority(
             token_program.key,
             mint.key,
             Some(&ctx.accounts.close_authority.key()),
@@ -757,20 +818,27 @@ use spl_token_2022::extension::mint_close_authority::instruction as close_author
     pub close_authority: Signer<'info>,
 // @wizard:end
 
-// =============================================================================
-// Extension Implementation
-// =============================================================================
+/// Close mint extension allows closing the mint account to reclaim rent.
+///
+/// WARNING: Once closed, the mint cannot be recreated with the same address.
 
+/// Closes the mint account and returns rent to the destination.
+///
+/// Requirements:
+/// - Total supply must be 0 (all tokens burned)
+/// - Caller must be the close authority
 pub fn handler(ctx: Context<CloseMint>) -> Result<()> {
     msg!("Closing mint account: {}", ctx.accounts.mint.key());
+    msg!("Rent returned to: {}", ctx.accounts.destination.key());
 
+    // Close mint via CPI to Token-2022 program
     invoke(
         &token_instruction::close_account(
             ctx.accounts.token_program.key,
             ctx.accounts.mint.key,
             ctx.accounts.destination.key,
             ctx.accounts.close_authority.key,
-            &[],
+            &[],  // No multisig signers
         )?,
         &[
             ctx.accounts.mint.to_account_info(),
@@ -779,19 +847,26 @@ pub fn handler(ctx: Context<CloseMint>) -> Result<()> {
         ],
     )?;
 
-    msg!("Mint closed, rent returned to {}", ctx.accounts.destination.key());
+    msg!("Mint closed successfully");
     Ok(())
 }
 
 #[derive(Accounts)]
 pub struct CloseMint<'info> {
+    /// The mint account to close
     /// CHECK: Validated by Token-2022 program
     #[account(mut)]
     pub mint: AccountInfo<'info>,
+
+    /// The close authority for this mint
     pub close_authority: Signer<'info>,
+
+    /// The account to receive the rent
     /// CHECK: Any account can receive the rent
     #[account(mut)]
     pub destination: AccountInfo<'info>,
+
+    /// Token-2022 program
     pub token_program: Program<'info, Token2022>,
 }
 
@@ -799,6 +874,7 @@ pub struct CloseMint<'info> {
 pub enum CloseMintError {
     #[msg("Cannot close mint with non-zero supply")]
     NonZeroSupply,
+
     #[msg("Close authority mismatch")]
     InvalidCloseAuthority,
 }
@@ -808,15 +884,13 @@ pub enum CloseMintError {
 
 ### Non-Transferable Extension (Soulbound)
 
-**src/non_transferable.rs**
+**src/non_transferable.rs** (`extensions/non-transferable/mod.rs`)
 
 ```rust
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
-
-// =============================================================================
-// Wizard Injection Markers
-// =============================================================================
+use spl_token_2022::extension::ExtensionType;
+use spl_token_2022::instruction as token_instruction;
 
 // @wizard:inject.lib.modules
 pub mod non_transferable;
@@ -824,7 +898,6 @@ pub mod non_transferable;
 
 // @wizard:inject.create_mint.imports
 use crate::non_transferable;
-use spl_token_2022::extension::non_transferable::instruction as non_transferable_ix;
 // @wizard:end
 
 // @wizard:inject.create_mint.extension_types
@@ -833,7 +906,7 @@ use spl_token_2022::extension::non_transferable::instruction as non_transferable
 
 // @wizard:inject.create_mint.init_extensions
     invoke(
-        &non_transferable_ix::initialize_non_transferable_mint(
+        &token_instruction::initialize_non_transferable_mint(
             token_program.key,
             mint.key,
         )?,
@@ -842,24 +915,25 @@ use spl_token_2022::extension::non_transferable::instruction as non_transferable
     msg!("NonTransferable initialized - tokens are soulbound");
 // @wizard:end
 
-// =============================================================================
-// Extension Implementation
-// =============================================================================
-
 /// Non-transferable (Soulbound) token extension.
 ///
-/// Use cases:
+/// When enabled, tokens cannot be transferred between accounts after minting.
+/// This is useful for:
 /// - Credentials and certifications
 /// - Membership badges
 /// - Achievement tokens
 /// - Reputation scores
 /// - Identity tokens
+///
+/// Note: This extension is mutually exclusive with transfer-fee
+/// (fees don't make sense if transfers are impossible).
 
 #[error_code]
 pub enum NonTransferableError {
     #[msg("Non-transferable tokens cannot be transferred")]
     TransferNotAllowed,
-    #[msg("Cannot enable both non-transferable and transfer-fee")]
+
+    #[msg("Cannot enable both non-transferable and transfer-fee extensions")]
     IncompatibleWithTransferFee,
 }
 ```
@@ -868,23 +942,25 @@ pub enum NonTransferableError {
 
 ## 9. Assembled Example: Transfer Fee + Close Mint
 
-Here's what the final assembled code looks like with **Metadata** + **Transfer Fee** + **Close Mint** enabled:
+Here's what the final assembled code looks like with **Metadata** + **Transfer Fee** + **Close Mint** enabled. All `@wizard` markers are stripped from the output.
 
 ### Assembled src/lib.rs
 
 ```rust
 use anchor_lang::prelude::*;
 
-declare_id!("YOUR_PROGRAM_ID");
+declare_id!("11111111111111111111111111111111");
 
 pub mod instructions;
 pub mod state;
 pub mod error;
 
-// Injected modules
+// Extension modules
 pub mod metadata;
 pub mod transfer_fee;
+pub use transfer_fee::update_fee::*;
 pub mod close_mint;
+pub use close_mint::*;
 
 use instructions::*;
 
@@ -892,28 +968,32 @@ use instructions::*;
 pub mod token_mint {
     use super::*;
 
+    /// Creates a new Token-2022 mint with the specified configuration.
     pub fn create_mint(
         ctx: Context<CreateMint>,
         name: String,
         symbol: String,
         uri: String,
         decimals: u8,
-        // Injected args from transfer-fee
+        // Extension arguments
         fee_basis_points: u16,
         max_fee: u64,
     ) -> Result<()> {
         instructions::create_mint::handler(ctx, name, symbol, uri, decimals, fee_basis_points, max_fee)
     }
 
-    // Injected instructions
+    /// Updates the transfer fee configuration.
+    /// Only the fee authority can call this.
     pub fn update_transfer_fee(
         ctx: Context<UpdateTransferFee>,
         fee_basis_points: u16,
         max_fee: u64,
     ) -> Result<()> {
-        transfer_fee::update_fee_handler(ctx, fee_basis_points, max_fee)
+        transfer_fee::update_fee::handler(ctx, fee_basis_points, max_fee)
     }
 
+    /// Closes the mint account and returns rent to the destination.
+    /// Requires total supply to be 0.
     pub fn close_mint(ctx: Context<CloseMint>) -> Result<()> {
         close_mint::handler(ctx)
     }
@@ -926,6 +1006,12 @@ pub mod token_mint {
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
+
+// Extension imports
+use crate::metadata;
+use crate::transfer_fee;
+use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_ix;
+use crate::close_mint;
 use spl_token_2022::{
     extension::{metadata_pointer::instruction as metadata_pointer_instruction, ExtensionType},
     instruction as token_instruction,
@@ -933,23 +1019,19 @@ use spl_token_2022::{
 };
 use spl_token_metadata_interface::{instruction as metadata_instruction, state::TokenMetadata};
 
-// Injected imports
-use crate::metadata;
-use crate::transfer_fee;
-use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_ix;
-use crate::close_mint;
-use spl_token_2022::extension::mint_close_authority::instruction as close_authority_ix;
-
 pub fn handler(
     ctx: Context<CreateMint>,
     name: String,
     symbol: String,
     uri: String,
     decimals: u8,
+    // Extension arguments
     fee_basis_points: u16,
     max_fee: u64,
 ) -> Result<()> {
     msg!("Creating Token-2022 mint: {} ({})", name, symbol);
+    msg!("Decimals: {}", decimals);
+    msg!("URI: {}", uri);
 
     let payer = &ctx.accounts.payer;
     let mint = &ctx.accounts.mint;
@@ -957,19 +1039,17 @@ pub fn handler(
     let token_program = &ctx.accounts.token_program;
     let system_program = &ctx.accounts.system_program;
 
-    // STEP 1: Build extension types
     let mut extension_types = vec![ExtensionType::MetadataPointer];
 
-    // Injected extension types
     extension_types.push(ExtensionType::TransferFeeConfig);
     extension_types.push(ExtensionType::MintCloseAuthority);
 
-    // STEP 2: Calculate space
     let mint_space = ExtensionType::try_calculate_account_len::<Mint>(&extension_types)
         .map_err(|_| ErrorCode::AccountDidNotSerialize)?;
 
     let metadata = TokenMetadata {
-        update_authority: Some(mint_authority.key()).try_into()
+        update_authority: Some(mint_authority.key())
+            .try_into()
             .map_err(|_| ErrorCode::AccountDidNotSerialize)?,
         mint: mint.key(),
         name: name.clone(),
@@ -977,94 +1057,132 @@ pub fn handler(
         uri: uri.clone(),
         additional_metadata: vec![],
     };
-    let metadata_space = metadata.tlv_size_of()
+    let metadata_space = metadata
+        .tlv_size_of()
         .map_err(|_| ErrorCode::AccountDidNotSerialize)?;
 
     let total_space = mint_space + metadata_space;
+    msg!(
+        "Allocating {} bytes (mint: {}, metadata: {})",
+        total_space,
+        mint_space,
+        metadata_space
+    );
 
-    // STEP 3: Create mint account
     let rent = Rent::get()?;
     let lamports = rent.minimum_balance(total_space);
 
     invoke(
         &anchor_lang::solana_program::system_instruction::create_account(
-            payer.key, mint.key, lamports, total_space as u64, token_program.key,
+            payer.key,
+            mint.key,
+            lamports,
+            total_space as u64,
+            token_program.key,
         ),
-        &[payer.to_account_info(), mint.to_account_info(), system_program.to_account_info()],
+        &[
+            payer.to_account_info(),
+            mint.to_account_info(),
+            system_program.to_account_info(),
+        ],
     )?;
+    msg!("Mint account created");
 
-    // STEP 4: Initialize extensions (BEFORE mint init)
-
-    // MetadataPointer (always)
     invoke(
         &metadata_pointer_instruction::initialize(
-            token_program.key, mint.key, Some(mint_authority.key()), Some(mint.key()),
+            token_program.key,
+            mint.key,
+            Some(mint_authority.key()),
+            Some(mint.key()),
         )?,
         &[mint.to_account_info()],
     )?;
+    msg!("MetadataPointer initialized");
 
-    // Injected: TransferFeeConfig
     transfer_fee::validate_fee_config(fee_basis_points, max_fee)?;
     invoke(
         &transfer_fee_ix::initialize_transfer_fee_config(
-            token_program.key, mint.key,
+            token_program.key,
+            mint.key,
             Some(&ctx.accounts.fee_authority.key()),
             Some(&ctx.accounts.fee_authority.key()),
-            fee_basis_points, max_fee,
+            fee_basis_points,
+            max_fee,
         )?,
         &[mint.to_account_info()],
     )?;
-
-    // Injected: MintCloseAuthority
+    msg!("TransferFeeConfig initialized: {} bps, max {}", fee_basis_points, max_fee);
     invoke(
-        &close_authority_ix::initialize_mint_close_authority(
-            token_program.key, mint.key, Some(&ctx.accounts.close_authority.key()),
+        &token_instruction::initialize_mint_close_authority(
+            token_program.key,
+            mint.key,
+            Some(&ctx.accounts.close_authority.key()),
         )?,
         &[mint.to_account_info()],
     )?;
+    msg!("MintCloseAuthority initialized: {}", ctx.accounts.close_authority.key());
 
-    // STEP 5: Initialize mint
     invoke(
         &token_instruction::initialize_mint2(
-            token_program.key, mint.key, mint_authority.key, None, decimals,
+            token_program.key,
+            mint.key,
+            mint_authority.key,
+            None,
+            decimals,
         )?,
         &[mint.to_account_info()],
     )?;
+    msg!("Mint initialized with {} decimals", decimals);
 
-    // STEP 6: Initialize TokenMetadata
     invoke(
         &metadata_instruction::initialize(
-            token_program.key, mint.key, mint_authority.key, mint.key, mint_authority.key,
-            name.clone(), symbol.clone(), uri.clone(),
+            token_program.key,
+            mint.key,
+            mint_authority.key,
+            mint.key,
+            mint_authority.key,
+            name.clone(),
+            symbol.clone(),
+            uri.clone(),
         ),
         &[mint.to_account_info(), mint_authority.to_account_info()],
     )?;
+    msg!("Metadata initialized: {} ({})", name, symbol);
 
-    // Injected body: metadata validation
+    msg!("Mint created successfully: {}", mint.key());
     metadata::validate_metadata(&name, &symbol, &uri)?;
 
-    msg!("Mint created: {}", mint.key());
     Ok(())
 }
 
 #[derive(Accounts)]
 #[instruction(name: String, symbol: String, uri: String, decimals: u8, fee_basis_points: u16, max_fee: u64)]
 pub struct CreateMint<'info> {
+    /// The account paying for rent and transaction fees
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    /// CHECK: Mint to be created
+    /// CHECK: The mint account to be created
+    /// This will be initialized as a Token-2022 mint with extensions
     #[account(mut)]
     pub mint: Signer<'info>,
 
+    /// The mint authority that can mint new tokens
+    /// Also serves as the metadata update authority
     pub mint_authority: Signer<'info>,
 
-    // Injected accounts
-    pub fee_authority: Signer<'info>,
-    pub close_authority: Signer<'info>,
-
+    /// Token-2022 program
     pub token_program: Program<'info, Token2022>,
+
+    /// System program for account creation
     pub system_program: Program<'info, System>,
+
+    // Extension accounts
+    /// The fee authority that can update fees and withdraw withheld amounts
+    pub fee_authority: Signer<'info>,
+
+    /// The close authority that can close the mint
+    pub close_authority: Signer<'info>,
 }
 ```
 

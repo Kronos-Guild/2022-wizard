@@ -7,6 +7,7 @@ pub mod update_fee;
 
 // @wizard:inject.lib.modules
 pub mod transfer_fee;
+pub use transfer_fee::update_fee::*;
 // @wizard:end
 
 // @wizard:inject.create_mint.imports

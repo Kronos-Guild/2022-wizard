@@ -98,6 +98,9 @@ pub fn handler(
     let token_program = &ctx.accounts.token_program;
     let system_program = &ctx.accounts.system_program;
 
+    // @wizard:inject.create_mint.body
+    // @wizard:end
+
     let mut extension_types = vec![ExtensionType::MetadataPointer];
 
     // @wizard:inject.create_mint.extension_types
@@ -188,9 +191,6 @@ pub fn handler(
     )?;
     msg!("Metadata initialized: {} ({})", name, symbol);
 
-    // @wizard:inject.create_mint.body
-    // @wizard:end
-
     msg!("Mint created successfully: {}", mint.key());
     Ok(())
 }
@@ -220,13 +220,10 @@ pub struct CreateMint<'info> {
 `,
   },
   other: {
-    "mod.rs": `/// State module for Token Mint program
-///
-/// Add any program state structs here.
-/// These are typically PDA accounts that store program configuration.
-
-/// Seed for mint authority PDA (when using PDA authority mode)
-pub const MINT_AUTHORITY_SEED: &[u8] = b"mint_authority";
+    "mod.rs": `// State module for Token Mint program
+//
+// Add any program state structs here.
+// These are typically PDA accounts that store program configuration.
 `,
     "error.rs": `use anchor_lang::prelude::*;
 
@@ -236,18 +233,6 @@ pub enum TokenMintError {
     /// The caller is not authorized to perform this action
     #[msg("Unauthorized access")]
     Unauthorized,
-
-    /// The provided token name is invalid (empty or too long)
-    #[msg("Invalid token name")]
-    InvalidName,
-
-    /// The provided token symbol is invalid (empty or too long)
-    #[msg("Invalid token symbol")]
-    InvalidSymbol,
-
-    /// The provided decimals value is out of range (must be 0-9)
-    #[msg("Invalid decimals value")]
-    InvalidDecimals,
 }
 `,
   },
@@ -267,6 +252,8 @@ export interface InstructionInjection {
   args?: string[];
   body?: string;
   accounts?: string;
+  extension_types?: string;
+  init_extensions?: string;
 }
 
 export interface Extension {
@@ -308,6 +295,8 @@ export const extensions: Record<string, Extension> = {
         args: undefined,
         body: `    metadata::validate_metadata(&name, &symbol, &uri)?;`,
         accounts: undefined,
+        extension_types: undefined,
+        init_extensions: undefined,
       },
     },
     files: {
@@ -409,7 +398,8 @@ pub enum MetadataError {
     },
     inject: {
       lib: {
-        modules: `pub mod transfer_fee;`,
+        modules: `pub mod transfer_fee;
+pub use transfer_fee::update_fee::*;`,
         instructions: `
 /// Updates the transfer fee configuration.
 /// Only the fee authority can call this.
@@ -428,6 +418,20 @@ use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_ix;`,
         body: undefined,
         accounts: `    /// The fee authority that can update fees and withdraw withheld amounts
     pub fee_authority: Signer<'info>,`,
+        extension_types: `    extension_types.push(ExtensionType::TransferFeeConfig);`,
+        init_extensions: `    transfer_fee::validate_fee_config(fee_basis_points, max_fee)?;
+    invoke(
+        &transfer_fee_ix::initialize_transfer_fee_config(
+            token_program.key,
+            mint.key,
+            Some(&ctx.accounts.fee_authority.key()),  // transfer_fee_config_authority
+            Some(&ctx.accounts.fee_authority.key()),  // withdraw_withheld_authority
+            fee_basis_points,
+            max_fee,
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("TransferFeeConfig initialized: {} bps, max {}", fee_basis_points, max_fee);`,
       },
     },
     files: {
@@ -440,6 +444,7 @@ pub mod update_fee;
 
 // @wizard:inject.lib.modules
 pub mod transfer_fee;
+pub use transfer_fee::update_fee::*;
 // @wizard:end
 
 // @wizard:inject.create_mint.imports
@@ -601,7 +606,8 @@ pub struct UpdateTransferFee<'info> {
     config: undefined,
     inject: {
       lib: {
-        modules: `pub mod close_mint;`,
+        modules: `pub mod close_mint;
+pub use close_mint::*;`,
         instructions: `
     /// Closes the mint account and returns rent to the destination.
     /// Requires total supply to be 0.
@@ -610,12 +616,21 @@ pub struct UpdateTransferFee<'info> {
     }`,
       },
       "create_mint": {
-        imports: `use crate::close_mint;
-use spl_token_2022::extension::mint_close_authority::instruction as close_authority_ix;`,
+        imports: `use crate::close_mint;`,
         args: undefined,
         body: undefined,
         accounts: `    /// The close authority that can close the mint
     pub close_authority: Signer<'info>,`,
+        extension_types: `    extension_types.push(ExtensionType::MintCloseAuthority);`,
+        init_extensions: `    invoke(
+        &token_instruction::initialize_mint_close_authority(
+            token_program.key,
+            mint.key,
+            Some(&ctx.accounts.close_authority.key()),
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("MintCloseAuthority initialized: {}", ctx.accounts.close_authority.key());`,
       },
     },
     files: {
@@ -623,12 +638,13 @@ use spl_token_2022::extension::mint_close_authority::instruction as close_author
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
 use spl_token_2022::{
-    extension::{mint_close_authority::instruction as close_authority_instruction, ExtensionType},
+    extension::ExtensionType,
     instruction as token_instruction,
 };
 
 // @wizard:inject.lib.modules
 pub mod close_mint;
+pub use close_mint::*;
 // @wizard:end
 
 // @wizard:inject.lib.instructions
@@ -642,7 +658,6 @@ pub mod close_mint;
 
 // @wizard:inject.create_mint.imports
 use crate::close_mint;
-use spl_token_2022::extension::mint_close_authority::instruction as close_authority_ix;
 // @wizard:end
 
 // @wizard:inject.create_mint.extension_types
@@ -651,7 +666,7 @@ use spl_token_2022::extension::mint_close_authority::instruction as close_author
 
 // @wizard:inject.create_mint.init_extensions
     invoke(
-        &close_authority_ix::initialize_mint_close_authority(
+        &token_instruction::initialize_mint_close_authority(
             token_program.key,
             mint.key,
             Some(&ctx.accounts.close_authority.key()),
@@ -742,19 +757,26 @@ pub enum CloseMintError {
         instructions: undefined,
       },
       "create_mint": {
-        imports: `use crate::non_transferable;
-use spl_token_2022::extension::non_transferable::instruction as non_transferable_ix;`,
+        imports: `use crate::non_transferable;`,
         args: undefined,
         body: undefined,
         accounts: undefined,
+        extension_types: `    extension_types.push(ExtensionType::NonTransferable);`,
+        init_extensions: `    invoke(
+        &token_instruction::initialize_non_transferable_mint(
+            token_program.key,
+            mint.key,
+        )?,
+        &[mint.to_account_info()],
+    )?;
+    msg!("NonTransferable initialized - tokens are soulbound");`,
       },
     },
     files: {
       "mod.rs": `use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
-use spl_token_2022::extension::{
-    non_transferable::instruction as non_transferable_instruction, ExtensionType,
-};
+use spl_token_2022::extension::ExtensionType;
+use spl_token_2022::instruction as token_instruction;
 
 // @wizard:inject.lib.modules
 pub mod non_transferable;
@@ -762,7 +784,6 @@ pub mod non_transferable;
 
 // @wizard:inject.create_mint.imports
 use crate::non_transferable;
-use spl_token_2022::extension::non_transferable::instruction as non_transferable_ix;
 // @wizard:end
 
 // @wizard:inject.create_mint.extension_types
@@ -771,7 +792,7 @@ use spl_token_2022::extension::non_transferable::instruction as non_transferable
 
 // @wizard:inject.create_mint.init_extensions
     invoke(
-        &non_transferable_ix::initialize_non_transferable_mint(
+        &token_instruction::initialize_non_transferable_mint(
             token_program.key,
             mint.key,
         )?,
@@ -813,6 +834,31 @@ export type ExtensionId = keyof typeof extensions;
 // =============================================================================
 
 /**
+ * Replaces a marker block (// @wizard:inject.X.Y ... // @wizard:end) with replacement content.
+ * Used to inject extension code at specific marker positions in base templates.
+ */
+function replaceMarkerBlock(code: string, markerType: string, replacement: string): string {
+  const lines = code.split("\n");
+  const result: string[] = [];
+  let skipping = false;
+  for (const line of lines) {
+    if (line.includes("@wizard:inject.") && line.includes("." + markerType)) {
+      skipping = true;
+      result.push(replacement);
+      continue;
+    }
+    if (skipping && line.trim() === "// @wizard:end") {
+      skipping = false;
+      continue;
+    }
+    if (!skipping) {
+      result.push(line);
+    }
+  }
+  return result.join("\n");
+}
+
+/**
  * Strips all @wizard marker comments from the code.
  * Handles both block markers (// @wizard:inject... // @wizard:end) and inline markers.
  */
@@ -840,9 +886,10 @@ export function assembleLib(enabledExtensions: ExtensionId[], programName?: stri
     code = code.replace(/pub mod token_mint/, `pub mod ${programName}`);
   }
 
-  // Collect all module declarations and instructions to inject
+  // Collect all module declarations, instructions, and args to inject
   const modules: string[] = [];
   const instructions: string[] = [];
+  const args: string[] = [];
 
   for (const extId of enabledExtensions) {
     const ext = extensions[extId];
@@ -854,6 +901,14 @@ export function assembleLib(enabledExtensions: ExtensionId[], programName?: stri
         instructions.push(ext.inject.lib.instructions);
       }
     }
+    // Collect args from instruction injections (e.g., create_mint args)
+    for (const [target, injection] of Object.entries(ext?.inject ?? {})) {
+      if (target === "lib") continue;
+      const instrInj = injection as InstructionInjection | undefined;
+      if (instrInj?.args) {
+        args.push(...instrInj.args);
+      }
+    }
   }
 
   // Inject modules after the last "pub mod" line
@@ -863,6 +918,22 @@ export function assembleLib(enabledExtensions: ExtensionId[], programName?: stri
     code = code.replace(
       /(pub mod error;)/,
       `$1\n\n// Extension modules\n${moduleLines}`
+    );
+  }
+
+  // Inject extension args into create_mint function signature and forwarding call
+  if (args.length > 0) {
+    const argsStr = args.join(",\n        ");
+    // Add args to function signature
+    code = code.replace(
+      /(pub fn create_mint\([^)]*decimals: u8,)\n(\s*\) -> Result<\(\)>)/,
+      `$1\n        // Extension arguments\n        ${argsStr},\n    ) -> Result<()>`
+    );
+    // Add arg names to the handler forwarding call
+    const argNames = args.map(a => a.split(":")[0].trim()).join(", ");
+    code = code.replace(
+      /(instructions::create_mint::handler\(ctx, name, symbol, uri, decimals)(\))/,
+      `$1, ${argNames})`
     );
   }
 
@@ -902,6 +973,8 @@ export function assembleInstruction(
   const args: string[] = [];
   const bodyParts: string[] = [];
   const accounts: string[] = [];
+  const extensionTypes: string[] = [];
+  const initExtensions: string[] = [];
 
   for (const extId of enabledExtensions) {
     const ext = extensions[extId];
@@ -911,6 +984,8 @@ export function assembleInstruction(
       if (injection.args) args.push(...injection.args);
       if (injection.body) bodyParts.push(injection.body);
       if (injection.accounts) accounts.push(injection.accounts);
+      if (injection.extension_types) extensionTypes.push(injection.extension_types);
+      if (injection.init_extensions) initExtensions.push(injection.init_extensions);
     }
   }
 
@@ -931,8 +1006,8 @@ export function assembleInstruction(
       /decimals: u8,\n\) -> Result<\(\)>/,
       `decimals: u8,\n    // Extension arguments\n    ${argsStr},\n) -> Result<()>`
     );
-    // Add to #[instruction] macro
-    const instrArgs = args.map(a => a.split(":")[0].trim()).join(", ");
+    // Add to #[instruction] macro (with types, e.g. "fee_basis_points: u16, max_fee: u64")
+    const instrArgs = args.join(", ");
     code = code.replace(
       /(#\[instruction\([^)]+)(\)\])/,
       `$1, ${instrArgs}$2`
@@ -955,6 +1030,18 @@ export function assembleInstruction(
       /(pub system_program: Program<'info, System>,\n})/,
       `pub system_program: Program<'info, System>,\n\n    // Extension accounts\n${accountsCode}\n}`
     );
+  }
+
+  // Inject extension_types at marker position in base template
+  if (extensionTypes.length > 0) {
+    const typesCode = extensionTypes.join("\n");
+    code = replaceMarkerBlock(code, "extension_types", typesCode);
+  }
+
+  // Inject init_extensions at marker position in base template
+  if (initExtensions.length > 0) {
+    const initCode = initExtensions.join("\n");
+    code = replaceMarkerBlock(code, "init_extensions", initCode);
   }
 
   // Strip any remaining marker comments

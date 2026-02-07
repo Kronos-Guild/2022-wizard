@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect, memo } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback, memo } from "react";
 import dynamic from "next/dynamic";
 import type { HTMLMotionProps } from "framer-motion";
 import type { WizardState } from "@/lib/wizard/types";
 import { generateCode } from "@/lib/codegen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Check, Clipboard, ClipboardList, Download } from "lucide-react";
 
 // Dynamic import framer-motion to reduce initial bundle size
 const MotionDiv = dynamic(
@@ -61,7 +62,6 @@ export function CodePreview({ state }: CodePreviewProps) {
   // Detect file changes and track which lines changed (added vs removed)
   // This effect intentionally sets state to trigger animations when files change
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
     const newPulses = new Map<string, PulseAnimation>();
     const newChangedLines = new Map<string, Map<number, ChangeType>>();
 
@@ -151,24 +151,50 @@ export function CodePreview({ state }: CodePreviewProps) {
         clearTimeout(lineTimeout);
       };
     }
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, [files]);
 
   const activeFile = files.find((f) => f.id === activeFileId) ?? files[0];
   const activeChangedLines = changedLines.get(activeFileId) ?? new Map();
 
-  const handleCopyCurrent = async () => {
+  // Copy feedback state
+  const [copiedCurrent, setCopiedCurrent] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
+
+  const handleCopyCurrent = useCallback(async () => {
     if (activeFile) {
       await navigator.clipboard.writeText(activeFile.content);
+      setCopiedCurrent(true);
+      setTimeout(() => setCopiedCurrent(false), 2000);
     }
-  };
+  }, [activeFile]);
 
-  const handleCopyAll = async () => {
+  const handleCopyAll = useCallback(async () => {
     const allContent = files
       .map((f) => `// === ${f.path} ===\n\n${f.content}`)
       .join("\n\n");
     await navigator.clipboard.writeText(allContent);
-  };
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
+  }, [files]);
+
+  const handleDownloadZip = useCallback(async () => {
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+
+    for (const file of files) {
+      zip.file(file.path, file.content);
+    }
+
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${state.name.replace(/\s+/g, "-").toLowerCase() || "token-mint"}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [files, state.name]);
 
   return (
     <div className="flex h-full flex-col">
@@ -243,23 +269,35 @@ export function CodePreview({ state }: CodePreviewProps) {
         <Button
           variant="outline"
           size="sm"
-          className="rounded-full text-xs"
+          className="rounded-full text-xs gap-1.5"
           onClick={handleCopyCurrent}
         >
-          Copy Current
+          {copiedCurrent ? (
+            <Check className="size-3.5" />
+          ) : (
+            <Clipboard className="size-3.5" />
+          )}
+          {copiedCurrent ? "Copied!" : "Copy Current"}
         </Button>
         <Button
           variant="outline"
           size="sm"
-          className="rounded-full text-xs"
+          className="rounded-full text-xs gap-1.5"
           onClick={handleCopyAll}
         >
-          Copy All
+          {copiedAll ? (
+            <Check className="size-3.5" />
+          ) : (
+            <ClipboardList className="size-3.5" />
+          )}
+          {copiedAll ? "Copied!" : "Copy All"}
         </Button>
         <Button
           size="sm"
-          className="rounded-full text-xs bg-brand text-brand-foreground hover:bg-brand/90"
+          className="rounded-full text-xs bg-brand text-brand-foreground hover:bg-brand/90 gap-1.5"
+          onClick={handleDownloadZip}
         >
+          <Download className="size-3.5" />
           Download .zip
         </Button>
       </div>

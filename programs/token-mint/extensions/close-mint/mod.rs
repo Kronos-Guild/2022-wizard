@@ -2,12 +2,13 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
 use spl_token_2022::{
-    extension::{mint_close_authority::instruction as close_authority_instruction, ExtensionType},
+    extension::ExtensionType,
     instruction as token_instruction,
 };
 
 // @wizard:inject.lib.modules
 pub mod close_mint;
+pub use close_mint::*;
 // @wizard:end
 
 // @wizard:inject.lib.instructions
@@ -21,7 +22,6 @@ pub mod close_mint;
 
 // @wizard:inject.create_mint.imports
 use crate::close_mint;
-use spl_token_2022::extension::mint_close_authority::instruction as close_authority_ix;
 // @wizard:end
 
 // @wizard:inject.create_mint.extension_types
@@ -30,7 +30,7 @@ use spl_token_2022::extension::mint_close_authority::instruction as close_author
 
 // @wizard:inject.create_mint.init_extensions
     invoke(
-        &close_authority_ix::initialize_mint_close_authority(
+        &token_instruction::initialize_mint_close_authority(
             token_program.key,
             mint.key,
             Some(&ctx.accounts.close_authority.key()),

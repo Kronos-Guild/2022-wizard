@@ -36,6 +36,9 @@ pub fn handler(
     let token_program = &ctx.accounts.token_program;
     let system_program = &ctx.accounts.system_program;
 
+    // @wizard:inject.create_mint.body
+    // @wizard:end
+
     let mut extension_types = vec![ExtensionType::MetadataPointer];
 
     // @wizard:inject.create_mint.extension_types
@@ -125,9 +128,6 @@ pub fn handler(
         &[mint.to_account_info(), mint_authority.to_account_info()],
     )?;
     msg!("Metadata initialized: {} ({})", name, symbol);
-
-    // @wizard:inject.create_mint.body
-    // @wizard:end
 
     msg!("Mint created successfully: {}", mint.key());
     Ok(())

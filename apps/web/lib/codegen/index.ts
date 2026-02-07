@@ -52,6 +52,30 @@ function toPascalCase(str: string): string {
 }
 
 /**
+ * Generates an Anchor.toml configuration file.
+ */
+function generateAnchorToml(state: WizardState): string {
+  const programName = toSnakeCase(state.name);
+  return `[features]
+seeds = false
+skip-lint = false
+
+[programs.${state.cluster}]
+${programName} = "11111111111111111111111111111111"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "${state.cluster}"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+`;
+}
+
+/**
  * Generates a Cargo.toml for the program.
  */
 function generateCargoToml(state: WizardState): string {
@@ -67,17 +91,22 @@ crate-type = ["cdylib", "lib"]
 name = "${programName}"
 
 [features]
+default = []
+cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
-cpi = ["no-entrypoint"]
-default = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
-anchor-lang = "0.30.1"
-anchor-spl = { version = "0.30.1", features = ["token-2022"] }
-spl-token-2022 = "4.0"
-spl-token-metadata-interface = "0.4"
+anchor-lang = { version = "0.32.1", features = ["interface-instructions"] }
+anchor-spl = "0.32.1"
+spl-token-2022 = "8"
+# Pin to versions compatible with anchor-spl 0.32.1 (solana-instruction 2.x)
+spl-token-metadata-interface = "0.7"
+spl-type-length-value = "0.8"
+# Pin blake3 to avoid edition2024 (unsupported by Solana SBF toolchain Cargo 1.84)
+blake3 = "=1.8.2"
 `;
 }
 
@@ -144,6 +173,12 @@ export function generateCode(state: WizardState): GeneratedFile[] {
       content: generateTestFile(state, programName, enabledExtensions),
     },
     // Project config
+    {
+      id: "Anchor.toml",
+      label: "Anchor.toml",
+      path: `Anchor.toml`,
+      content: generateAnchorToml(state),
+    },
     {
       id: "Cargo.toml",
       label: "Cargo.toml",

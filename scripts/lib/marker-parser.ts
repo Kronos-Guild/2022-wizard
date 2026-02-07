@@ -101,6 +101,8 @@ export interface InstructionInjection {
   args?: string[];
   body?: string;
   accounts?: string;
+  extension_types?: string;
+  init_extensions?: string;
 }
 
 export interface ExtensionInjections {
@@ -138,7 +140,9 @@ export function groupInjections(
       } else if (
         type === "imports" ||
         type === "body" ||
-        type === "accounts"
+        type === "accounts" ||
+        type === "extension_types" ||
+        type === "init_extensions"
       ) {
         instrInj[type] = content;
       }

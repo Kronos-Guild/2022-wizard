@@ -87,7 +87,7 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["interface-instructions"] }
-anchor-spl = "0.32.1"
+anchor-spl = { version = "0.32.1", features = ["token_2022"] }
 spl-token-2022 = "8"
 # Pin to versions compatible with anchor-spl 0.32.1 (solana-instruction 2.x)
 spl-token-metadata-interface = "0.7"

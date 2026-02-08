@@ -1,7 +1,8 @@
+use anchor_lang::prelude::InterfaceAccount;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::{InterfaceAccount, Mint};
+use anchor_spl::token_interface::Mint;
 use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_instruction;
 
 use super::{TransferFeeError, MAX_FEE_BASIS_POINTS};
@@ -39,7 +40,7 @@ pub fn handler(ctx: Context<UpdateTransferFee>, fee_basis_points: u16, max_fee: 
     invoke(
         &transfer_fee_instruction::set_transfer_fee(
             ctx.accounts.token_program.key,
-            ctx.accounts.mint.key,
+            &ctx.accounts.mint.key(),
             ctx.accounts.fee_authority.key,
             &[], // No multisig signers
             fee_basis_points,

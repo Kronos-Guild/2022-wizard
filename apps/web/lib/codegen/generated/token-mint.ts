@@ -525,9 +525,11 @@ pub enum TransferFeeError {
     InvalidFeeConfig,
 }
 `,
-      "update_fee.rs": `use anchor_lang::prelude::*;
+      "update_fee.rs": `use anchor_lang::prelude::InterfaceAccount;
+use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
+use anchor_spl::token_interface::Mint;
 use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_instruction;
 
 use super::{TransferFeeError, MAX_FEE_BASIS_POINTS};
@@ -565,7 +567,7 @@ pub fn handler(ctx: Context<UpdateTransferFee>, fee_basis_points: u16, max_fee: 
     invoke(
         &transfer_fee_instruction::set_transfer_fee(
             ctx.accounts.token_program.key,
-            ctx.accounts.mint.key,
+            &ctx.accounts.mint.key(),
             ctx.accounts.fee_authority.key,
             &[], // No multisig signers
             fee_basis_points,
@@ -584,9 +586,8 @@ pub fn handler(ctx: Context<UpdateTransferFee>, fee_basis_points: u16, max_fee: 
 #[derive(Accounts)]
 pub struct UpdateTransferFee<'info> {
     /// The mint account with transfer fee extension
-    /// CHECK: Validated by Token-2022 program
     #[account(mut)]
-    pub mint: AccountInfo<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
     /// The fee authority that can update the fee
     pub fee_authority: Signer<'info>,
@@ -637,6 +638,7 @@ pub use close_mint::*;`,
       "mod.rs": `use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
+use anchor_spl::token_interface::Mint;
 use spl_token_2022::{
     extension::ExtensionType,
     instruction as token_instruction,
@@ -698,7 +700,7 @@ pub fn handler(ctx: Context<CloseMint>) -> Result<()> {
     invoke(
         &token_instruction::close_account(
             ctx.accounts.token_program.key,
-            ctx.accounts.mint.key,
+            &ctx.accounts.mint.key(),
             ctx.accounts.destination.key,
             ctx.accounts.close_authority.key,
             &[],  // No multisig signers
@@ -717,9 +719,8 @@ pub fn handler(ctx: Context<CloseMint>) -> Result<()> {
 #[derive(Accounts)]
 pub struct CloseMint<'info> {
     /// The mint account to close
-    /// CHECK: Validated by Token-2022 program
     #[account(mut)]
-    pub mint: AccountInfo<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
     /// The close authority for this mint
     pub close_authority: Signer<'info>,

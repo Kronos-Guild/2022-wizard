@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::{Mint, InterfaceAccount};
+use anchor_spl::token_interface::Mint;
 use spl_token_2022::{
     extension::ExtensionType,
     instruction as token_instruction,
@@ -63,7 +63,7 @@ pub fn handler(ctx: Context<CloseMint>) -> Result<()> {
     invoke(
         &token_instruction::close_account(
             ctx.accounts.token_program.key,
-            ctx.accounts.mint.key,
+            &ctx.accounts.mint.key(),
             ctx.accounts.destination.key,
             ctx.accounts.close_authority.key,
             &[],  // No multisig signers

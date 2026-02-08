@@ -1,7 +1,23 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useEffect, useState, useMemo } from "react"
+import dynamic from "next/dynamic"
+import type { HTMLMotionProps } from "framer-motion"
+
+const MotionDiv = dynamic(
+  () => import("framer-motion").then((mod) => mod.motion.div),
+  { ssr: false }
+) as React.ComponentType<HTMLMotionProps<"div">>;
+
+const MotionSpan = dynamic(
+  () => import("framer-motion").then((mod) => mod.motion.span),
+  { ssr: false }
+) as React.ComponentType<HTMLMotionProps<"span">>;
+
+const AnimatePresence = dynamic(
+  () => import("framer-motion").then((mod) => mod.AnimatePresence),
+  { ssr: false }
+) as React.ComponentType<React.ComponentProps<typeof import("framer-motion").AnimatePresence>>;
 
 // Regex patterns for syntax highlighting (extracted to avoid recreation on each render)
 const REGEX_WHITESPACE = /^(\s+)/
@@ -228,14 +244,19 @@ export function CodeEditorMock() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setPrevState(currentState)
-      setCurrentState((prev) => (prev + 1) % CODE_STATES.length)
+      setCurrentState((prev) => {
+        setPrevState(prev)
+        return (prev + 1) % CODE_STATES.length
+      })
     }, 4000)
     return () => clearInterval(interval)
-  }, [currentState])
+  }, [])
 
   const currentCode = CODE_STATES[currentState]
-  const prevIds = new Set(CODE_STATES[prevState].lines.map((l) => l.id))
+  const prevIds = useMemo(
+    () => new Set(CODE_STATES[prevState].lines.map((l) => l.id)),
+    [prevState]
+  )
 
   return (
     <div className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.02] dark:bg-foreground/[0.03] overflow-hidden shadow-sm">
@@ -249,7 +270,7 @@ export function CodeEditorMock() {
           </div>
           <span className="ml-2 text-xs text-foreground/40 font-mono">lib.rs</span>
         </div>
-        <motion.span
+        <MotionSpan
           key={currentCode.label}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -257,7 +278,7 @@ export function CodeEditorMock() {
           className="text-xs font-medium text-foreground/50 px-2 py-0.5 rounded bg-foreground/5"
         >
           {currentCode.label}
-        </motion.span>
+        </MotionSpan>
       </div>
 
       {/* Code content */}
@@ -268,7 +289,7 @@ export function CodeEditorMock() {
               {currentCode.lines.map((line, index) => {
                 const isNew = !prevIds.has(line.id) || line.type.includes("-new")
                 return (
-                  <motion.div
+                  <MotionDiv
                     key={line.id}
                     layout
                     initial={{ opacity: 0, x: -10 }}
@@ -287,7 +308,7 @@ export function CodeEditorMock() {
                     className="leading-relaxed rounded"
                   >
                     {highlightLine(line.content)}
-                  </motion.div>
+                  </MotionDiv>
                 )
               })}
             </AnimatePresence>

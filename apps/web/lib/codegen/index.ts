@@ -1,6 +1,7 @@
 import type { WizardState, ExtensionState } from "@/lib/wizard/types";
 import {
   extensions,
+  baseFiles,
   programInfo,
   assembleLib,
   assembleInstruction,
@@ -186,6 +187,88 @@ export function generateCode(state: WizardState): GeneratedFile[] {
       content: generateCargoToml(state),
     },
   ];
+}
+
+/**
+ * Strips @wizard marker comments from extension source files.
+ */
+function stripMarkers(code: string): string {
+  let result = code.replace(
+    /^[ \t]*\/\/ @wizard:inject\.[^\n]*\n[\s\S]*?^[ \t]*\/\/ @wizard:end\n?/gm,
+    ""
+  );
+  result = result.replace(/^[ \t]*\/\/ @wizard:inject\.[^\n]*\n?/gm, "");
+  result = result.replace(/\n{3,}/g, "\n\n");
+  return result;
+}
+
+/**
+ * Generates all project files needed for a buildable Anchor program.
+ * This includes files not shown in the UI tabs: instructions/mod.rs,
+ * state/mod.rs, error.rs, and all enabled extension module files.
+ */
+export function generateProjectFiles(state: WizardState): GeneratedFile[] {
+  const programName = toSnakeCase(state.name);
+  const basePath = `programs/${programName}/src`;
+  const enabledExtensions = getEnabledExtensions(state);
+
+  const files = generateCode(state);
+
+  // instructions/mod.rs
+  files.push({
+    id: "instructions/mod.rs",
+    label: "instructions/mod.rs",
+    path: `${basePath}/instructions/mod.rs`,
+    content: "pub mod create_mint;\n\npub use create_mint::*;\n",
+  });
+
+  // state/mod.rs
+  files.push({
+    id: "state/mod.rs",
+    label: "state/mod.rs",
+    path: `${basePath}/state/mod.rs`,
+    content: baseFiles.other["mod.rs"],
+  });
+
+  // error.rs
+  files.push({
+    id: "error.rs",
+    label: "error.rs",
+    path: `${basePath}/error.rs`,
+    content: baseFiles.other["error.rs"],
+  });
+
+  // Extension module files (stripped of wizard markers)
+  for (const extId of enabledExtensions) {
+    const ext = extensions[extId];
+    if (!ext) continue;
+
+    const moduleName = extId.replace(/-/g, "_");
+    const fileEntries = Object.entries(ext.files);
+
+    if (fileEntries.length === 1) {
+      // Single-file extension: e.g., metadata.rs, close_mint.rs
+      const [, content] = fileEntries[0];
+      files.push({
+        id: `${moduleName}.rs`,
+        label: `${moduleName}.rs`,
+        path: `${basePath}/${moduleName}.rs`,
+        content: stripMarkers(content),
+      });
+    } else {
+      // Multi-file extension: e.g., transfer_fee/mod.rs, transfer_fee/update_fee.rs
+      for (const [fileName, content] of fileEntries) {
+        files.push({
+          id: `${moduleName}/${fileName}`,
+          label: `${moduleName}/${fileName}`,
+          path: `${basePath}/${moduleName}/${fileName}`,
+          content: stripMarkers(content),
+        });
+      }
+    }
+  }
+
+  return files;
 }
 
 /**

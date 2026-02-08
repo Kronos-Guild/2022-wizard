@@ -1,11 +1,36 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
+import type { HTMLMotionProps } from "framer-motion";
 import { Coins, Vault, ImageIcon, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CodeEditorMock } from "@/components/code-editor-mock";
 import { StartBuildingButton } from "@/components/start-building-button";
+
+const MotionDiv = dynamic(
+  () => import("framer-motion").then((mod) => mod.motion.div),
+  { ssr: false }
+) as React.ComponentType<HTMLMotionProps<"div">>;
+
+const MotionSection = dynamic(
+  () => import("framer-motion").then((mod) => mod.motion.section),
+  { ssr: false }
+) as React.ComponentType<HTMLMotionProps<"section">>;
+
+const MotionH1 = dynamic(
+  () => import("framer-motion").then((mod) => mod.motion.h1),
+  { ssr: false }
+) as React.ComponentType<HTMLMotionProps<"h1">>;
+
+const MotionP = dynamic(
+  () => import("framer-motion").then((mod) => mod.motion.p),
+  { ssr: false }
+) as React.ComponentType<HTMLMotionProps<"p">>;
+
+const CodeEditorMock = dynamic(
+  () => import("@/components/code-editor-mock").then((mod) => mod.CodeEditorMock),
+  { ssr: false }
+);
 
 interface ProgramOptionProps {
   title: string;
@@ -125,13 +150,13 @@ export function HomeContent() {
       <section className="flex flex-1 justify-center px-6 py-12 lg:px-12 lg:py-16">
         <div className="flex w-full max-w-7xl flex-col items-center gap-12 lg:flex-row lg:items-center lg:gap-16">
           {/* Left: Title + Description + CTA */}
-          <motion.div
+          <MotionDiv
             className="flex flex-col items-center text-center lg:items-start lg:text-left lg:flex-1"
             variants={containerVariants}
             initial="hidden"
             animate="visible"
           >
-            <motion.h1
+            <MotionH1
               className="text-7xl font-semibold tracking-tighter sm:text-8xl lg:text-9xl leading-[0.85]"
               style={{ fontFamily: "var(--font-clash)" }}
               variants={itemVariants}
@@ -147,29 +172,29 @@ export function HomeContent() {
               >
                 Wizard
               </span>
-            </motion.h1>
-            <motion.p
+            </MotionH1>
+            <MotionP
               className="mt-6 text-base text-foreground/40 tracking-widest uppercase"
               style={{ fontFamily: "var(--font-clash)" }}
               variants={itemVariants}
             >
               Anchor Program Generator
-            </motion.p>
-            <motion.p
+            </MotionP>
+            <MotionP
               className="mt-6 max-w-sm text-sm leading-relaxed text-foreground/50"
               variants={itemVariants}
             >
               Generate secure, production-ready Token-2022 programs from audited
               building blocks.
-            </motion.p>
+            </MotionP>
 
-            <motion.div variants={itemVariants}>
+            <MotionDiv variants={itemVariants}>
               <StartBuildingButton />
-            </motion.div>
-          </motion.div>
+            </MotionDiv>
+          </MotionDiv>
 
           {/* Right: Code editor mock */}
-          <motion.div
+          <MotionDiv
             className="w-full lg:flex-1 lg:max-w-2xl"
             variants={codeEditorVariants}
             initial="hidden"
@@ -179,49 +204,49 @@ export function HomeContent() {
             <div className="h-[540px]">
               <CodeEditorMock />
             </div>
-          </motion.div>
+          </MotionDiv>
         </div>
       </section>
 
       {/* Program Types Section */}
-      <motion.section
+      <MotionSection
         className="flex flex-col items-center px-6 pb-8 pt-4 lg:px-12"
         initial="hidden"
         animate="visible"
         variants={programCardsVariants}
       >
-        <motion.p
+        <MotionP
           className="text-sm text-foreground/40 tracking-widest uppercase"
           style={{ fontFamily: "var(--font-clash)" }}
           variants={programCardVariants}
         >
           Or choose a program type
-        </motion.p>
+        </MotionP>
 
         <div className="mt-6 flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-center">
-          <motion.div variants={programCardVariants} className="sm:flex-1 sm:max-w-[240px]">
+          <MotionDiv variants={programCardVariants} className="sm:flex-1 sm:max-w-[240px]">
             <ProgramOption
               title="Token Mint"
               icon={<Coins className="h-5 w-5" />}
               href="/wizard/token"
             />
-          </motion.div>
-          <motion.div variants={programCardVariants} className="sm:flex-1 sm:max-w-[240px]">
+          </MotionDiv>
+          <MotionDiv variants={programCardVariants} className="sm:flex-1 sm:max-w-[240px]">
             <ProgramOption
               title="Vault"
               icon={<Vault className="h-5 w-5" />}
               soon
             />
-          </motion.div>
-          <motion.div variants={programCardVariants} className="sm:flex-1 sm:max-w-[240px]">
+          </MotionDiv>
+          <MotionDiv variants={programCardVariants} className="sm:flex-1 sm:max-w-[240px]">
             <ProgramOption
               title="NFT Collection"
               icon={<ImageIcon className="h-5 w-5" />}
               soon
             />
-          </motion.div>
+          </MotionDiv>
         </div>
-      </motion.section>
+      </MotionSection>
     </div>
   );
 }

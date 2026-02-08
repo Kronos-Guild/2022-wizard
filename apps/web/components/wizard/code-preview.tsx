@@ -4,7 +4,7 @@ import { useMemo, useState, useRef, useEffect, useCallback, memo } from "react";
 import dynamic from "next/dynamic";
 import type { HTMLMotionProps } from "framer-motion";
 import type { WizardState } from "@/lib/wizard/types";
-import { generateCode } from "@/lib/codegen";
+import { generateCode, generateProjectFiles } from "@/lib/codegen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check, Clipboard, ClipboardList, Download } from "lucide-react";
@@ -119,12 +119,12 @@ export function CodePreview({ state }: CodePreviewProps) {
       });
       
       // Remove pulses after animation completes
-      const currentKeys = Array.from(newPulses.values()).map(p => p.key);
+      const currentKeySet = new Set(Array.from(newPulses.values()).map(p => p.key));
       const timeout = setTimeout(() => {
         setFilePulses(prev => {
           const updated = new Map(prev);
           updated.forEach((pulses, fileId) => {
-            const filtered = pulses.filter(p => !currentKeys.includes(p.key));
+            const filtered = pulses.filter(p => !currentKeySet.has(p.key));
             if (filtered.length === 0) {
               updated.delete(fileId);
             } else {
@@ -177,11 +177,14 @@ export function CodePreview({ state }: CodePreviewProps) {
     setTimeout(() => setCopiedAll(false), 2000);
   }, [files]);
 
+  const [downloaded, setDownloaded] = useState(false);
+
   const handleDownloadZip = useCallback(async () => {
     const JSZip = (await import("jszip")).default;
     const zip = new JSZip();
+    const allFiles = generateProjectFiles(state);
 
-    for (const file of files) {
+    for (const file of allFiles) {
       zip.file(file.path, file.content);
     }
 
@@ -194,7 +197,10 @@ export function CodePreview({ state }: CodePreviewProps) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [files, state.name]);
+
+    setDownloaded(true);
+    setTimeout(() => setDownloaded(false), 2000);
+  }, [state]);
 
   return (
     <div className="flex h-full flex-col">
@@ -266,42 +272,81 @@ export function CodePreview({ state }: CodePreviewProps) {
 
       {/* Action buttons */}
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="rounded-full text-xs gap-1.5"
+        <ActionButton
           onClick={handleCopyCurrent}
-        >
-          {copiedCurrent ? (
-            <Check className="size-3.5" />
-          ) : (
-            <Clipboard className="size-3.5" />
-          )}
-          {copiedCurrent ? "Copied!" : "Copy Current"}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="rounded-full text-xs gap-1.5"
+          done={copiedCurrent}
+          icon={<Clipboard className="size-3.5" />}
+          doneIcon={<Check className="size-3.5" />}
+          label="Copy Current"
+          doneLabel="Copied!"
+        />
+        <ActionButton
           onClick={handleCopyAll}
-        >
-          {copiedAll ? (
-            <Check className="size-3.5" />
-          ) : (
-            <ClipboardList className="size-3.5" />
-          )}
-          {copiedAll ? "Copied!" : "Copy All"}
-        </Button>
-        <Button
-          size="sm"
-          className="rounded-full text-xs bg-brand text-brand-foreground hover:bg-brand/90 gap-1.5"
+          done={copiedAll}
+          icon={<ClipboardList className="size-3.5" />}
+          doneIcon={<Check className="size-3.5" />}
+          label="Copy All"
+          doneLabel="Copied!"
+        />
+        <ActionButton
           onClick={handleDownloadZip}
-        >
-          <Download className="size-3.5" />
-          Download .zip
-        </Button>
+          done={downloaded}
+          icon={<Download className="size-3.5" />}
+          doneIcon={<Check className="size-3.5" />}
+          label="Download .zip"
+          doneLabel="Downloaded!"
+          variant="brand"
+        />
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Action Button with stable width (no layout shift on label swap)
+// ---------------------------------------------------------------------------
+
+interface ActionButtonProps {
+  onClick: () => void;
+  done: boolean;
+  icon: React.ReactNode;
+  doneIcon: React.ReactNode;
+  label: string;
+  doneLabel: string;
+  variant?: "outline" | "brand";
+}
+
+function ActionButton({
+  onClick,
+  done,
+  icon,
+  doneIcon,
+  label,
+  doneLabel,
+  variant = "outline",
+}: ActionButtonProps) {
+  return (
+    <Button
+      variant={variant === "brand" ? "default" : "outline"}
+      size="sm"
+      className={cn(
+        "rounded-full text-xs gap-1.5",
+        variant === "brand" &&
+          "bg-brand text-brand-foreground hover:bg-brand/90"
+      )}
+      onClick={onClick}
+    >
+      {done ? doneIcon : icon}
+      {/* Invisible spacer holds the wider label width, visible label overlays it */}
+      <span className="relative inline-grid items-center justify-center">
+        <span className="invisible col-start-1 row-start-1 whitespace-nowrap">
+          {label.length >= doneLabel.length ? label : doneLabel}
+        </span>
+        <span className="col-start-1 row-start-1 whitespace-nowrap text-center">
+          {done ? doneLabel : label}
+        </span>
+      </span>
+    </Button>
   );
 }
 

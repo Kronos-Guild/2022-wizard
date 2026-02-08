@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
+use anchor_spl::token_interface::{Mint, InterfaceAccount};
 use spl_token_2022::{
     extension::ExtensionType,
     instruction as token_instruction,
@@ -81,9 +82,8 @@ pub fn handler(ctx: Context<CloseMint>) -> Result<()> {
 #[derive(Accounts)]
 pub struct CloseMint<'info> {
     /// The mint account to close
-    /// CHECK: Validated by Token-2022 program
     #[account(mut)]
-    pub mint: AccountInfo<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
     /// The close authority for this mint
     pub close_authority: Signer<'info>,

@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token_2022::Token2022;
+use anchor_spl::token_interface::{InterfaceAccount, Mint};
 use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_instruction;
 
 use super::{TransferFeeError, MAX_FEE_BASIS_POINTS};
@@ -57,9 +58,8 @@ pub fn handler(ctx: Context<UpdateTransferFee>, fee_basis_points: u16, max_fee: 
 #[derive(Accounts)]
 pub struct UpdateTransferFee<'info> {
     /// The mint account with transfer fee extension
-    /// CHECK: Validated by Token-2022 program
     #[account(mut)]
-    pub mint: AccountInfo<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
     /// The fee authority that can update the fee
     pub fee_authority: Signer<'info>,

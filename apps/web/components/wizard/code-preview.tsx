@@ -210,7 +210,7 @@ export function CodePreview({ state }: CodePreviewProps) {
           {/* Fade on right edge to indicate more content */}
           <div className="pointer-events-none absolute right-0 top-0 bottom-3 w-12 bg-gradient-to-l from-neutral-50 dark:from-neutral-900 to-transparent z-10" />
 
-          <div className="flex gap-2 overflow-x-scroll scrollbar-visible px-4 pb-2 sm:px-6">
+          <div role="tablist" aria-label="Source files" className="flex gap-2 overflow-x-scroll scrollbar-visible px-4 pb-2 sm:px-6">
             {files.map((file) => {
               const isActive = activeFileId === file.id;
               const pulses = filePulses.get(file.id) || [];
@@ -219,6 +219,10 @@ export function CodePreview({ state }: CodePreviewProps) {
               return (
                 <button
                   key={file.id}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`tabpanel-${file.id}`}
+                  id={`tab-${file.id}`}
                   onClick={() => setActiveFileId(file.id)}
                   className={cn(
                     "relative shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
@@ -257,7 +261,12 @@ export function CodePreview({ state }: CodePreviewProps) {
       </div>
 
       {/* Code block with syntax highlighting */}
-      <div className="mt-4 flex-1 overflow-auto rounded-xl border border-foreground/10 bg-background p-4">
+      <div
+        role="tabpanel"
+        id={`tabpanel-${activeFileId}`}
+        aria-labelledby={`tab-${activeFileId}`}
+        className="mt-4 flex-1 overflow-auto rounded-xl border border-foreground/10 bg-background p-4"
+      >
         <pre className="text-[11px] leading-relaxed sm:text-xs">
           <code className="block w-max min-w-full">
             {activeFile && (
@@ -271,6 +280,11 @@ export function CodePreview({ state }: CodePreviewProps) {
       </div>
 
       {/* Action buttons */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {copiedCurrent && "Current file copied to clipboard"}
+        {copiedAll && "All files copied to clipboard"}
+        {downloaded && "Project downloaded as zip"}
+      </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <ActionButton
           onClick={handleCopyCurrent}
@@ -416,7 +430,7 @@ function highlightLine(line: string): React.ReactNode {
     const commentMatch = remaining.match(REGEX_COMMENT);
     if (commentMatch) {
       tokens.push(
-        <span key={key++} className="text-foreground/40 italic">
+        <span key={key++} className="text-foreground/60 italic">
           {commentMatch[0]}
         </span>
       );

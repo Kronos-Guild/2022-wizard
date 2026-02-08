@@ -53,7 +53,7 @@ function ProgramOption({ title, icon, href, soon }: ProgramOptionProps) {
         className={cn(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
           soon
-            ? "bg-foreground/5 text-foreground/40"
+            ? "bg-foreground/5 text-foreground/60"
             : "bg-brand/10 text-brand group-hover:bg-brand/15"
         )}
       >
@@ -68,11 +68,11 @@ function ProgramOption({ title, icon, href, soon }: ProgramOptionProps) {
       </span>
 
       {soon ? (
-        <span className="shrink-0 rounded-full bg-foreground/5 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-foreground/40">
+        <span className="shrink-0 rounded-full bg-foreground/5 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-foreground/60">
           Soon
         </span>
       ) : (
-        <ArrowRight className="h-4 w-4 shrink-0 text-foreground/30 transition-all group-hover:translate-x-0.5 group-hover:text-brand" />
+        <ArrowRight className="h-4 w-4 shrink-0 text-foreground/50 transition-all group-hover:translate-x-0.5 group-hover:text-brand" />
       )}
     </div>
   );
@@ -174,14 +174,14 @@ export function HomeContent() {
               </span>
             </MotionH1>
             <MotionP
-              className="mt-6 text-base text-foreground/40 tracking-widest uppercase"
+              className="mt-6 text-base text-foreground/60 tracking-widest uppercase"
               style={{ fontFamily: "var(--font-clash)" }}
               variants={itemVariants}
             >
               Anchor Program Generator
             </MotionP>
             <MotionP
-              className="mt-6 max-w-sm text-sm leading-relaxed text-foreground/50"
+              className="mt-6 max-w-sm text-sm leading-relaxed text-foreground/60"
               variants={itemVariants}
             >
               Generate secure, production-ready Token-2022 programs from audited
@@ -216,7 +216,7 @@ export function HomeContent() {
         variants={programCardsVariants}
       >
         <MotionP
-          className="text-sm text-foreground/40 tracking-widest uppercase"
+          className="text-sm text-foreground/60 tracking-widest uppercase"
           style={{ fontFamily: "var(--font-clash)" }}
           variants={programCardVariants}
         >

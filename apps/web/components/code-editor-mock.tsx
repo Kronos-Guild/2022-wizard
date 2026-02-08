@@ -134,7 +134,7 @@ function highlightLine(content: string): React.ReactNode {
     const commentMatch = remaining.match(REGEX_COMMENT)
     if (commentMatch) {
       tokens.push(
-        <span key={key++} className="text-foreground/40 italic">
+        <span key={key++} className="text-foreground/60 italic">
           {commentMatch[0]}
         </span>
       )
@@ -268,14 +268,14 @@ export function CodeEditorMock() {
             <div className="h-2.5 w-2.5 rounded-full bg-yellow-400/60" />
             <div className="h-2.5 w-2.5 rounded-full bg-green-400/60" />
           </div>
-          <span className="ml-2 text-xs text-foreground/40 font-mono">lib.rs</span>
+          <span className="ml-2 text-xs text-foreground/60 font-mono">lib.rs</span>
         </div>
         <MotionSpan
           key={currentCode.label}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 10 }}
-          className="text-xs font-medium text-foreground/50 px-2 py-0.5 rounded bg-foreground/5"
+          className="text-xs font-medium text-foreground/60 px-2 py-0.5 rounded bg-foreground/5"
         >
           {currentCode.label}
         </MotionSpan>
@@ -327,8 +327,8 @@ export function CodeEditorMock() {
             }}
             className={`h-1.5 rounded-full transition-all duration-300 ${
               index === currentState
-                ? "w-6 bg-foreground/40"
-                : "w-1.5 bg-foreground/20 hover:bg-foreground/30"
+                ? "w-6 bg-foreground/50"
+                : "w-1.5 bg-foreground/25 hover:bg-foreground/40"
             }`}
             aria-label={`View ${state.label}`}
           />

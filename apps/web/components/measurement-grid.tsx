@@ -1,5 +1,3 @@
-"use client";
-
 interface MeasurementGridProps {
   className?: string;
   color?: string;
@@ -10,6 +8,7 @@ export function MeasurementGrid({ className, color }: MeasurementGridProps) {
 
   return (
     <div
+      aria-hidden="true"
       className={`absolute inset-0 overflow-hidden pointer-events-none text-foreground ${className || ""}`}
     >
       {/* Light mode grid - higher opacity */}

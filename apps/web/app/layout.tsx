@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { IBM_Plex_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
@@ -110,10 +111,19 @@ export default function RootLayout({
       >
         <NuqsAdapter>
           <ThemeProvider>
+            {/* Skip to main content link for keyboard users */}
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:rounded-full focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:ring-2 focus:ring-brand focus:shadow-md"
+            >
+              Skip to main content
+            </a>
+
             <MeasurementGrid className="fixed inset-0 -z-20" />
             
             {/* Top left corner dashed line */}
             <svg
+              aria-hidden="true"
               className="pointer-events-none fixed top-6 left-6 z-0 h-[120px] w-[120px] text-foreground opacity-15 dark:opacity-5"
               xmlns="http://www.w3.org/2000/svg"
             >
@@ -130,6 +140,7 @@ export default function RootLayout({
 
             {/* Bottom right corner dashed line */}
             <svg
+              aria-hidden="true"
               className="pointer-events-none fixed bottom-6 right-6 z-0 h-[120px] w-[120px] text-foreground opacity-15 dark:opacity-5"
               xmlns="http://www.w3.org/2000/svg"
             >
@@ -145,17 +156,17 @@ export default function RootLayout({
             </svg>
             
             <header className="relative z-50 flex items-center justify-center px-4 py-4">
-              <div
-                className="px-3 py-1 font-bold uppercase tracking-[0.25em] text-foreground/60"
-                style={{ fontFamily: "var(--font-clash)" }}
+              <Link
+                href="/"
+                className="px-3 py-1 font-bold uppercase tracking-[0.25em] text-foreground/60 font-display"
               >
                 2022 Wizard
-              </div>
+              </Link>
               <div className="absolute right-4">
                 <ThemeToggle />
               </div>
             </header>
-            <main className="flex-1">{children}</main>
+            <main id="main-content" className="flex-1">{children}</main>
             <footer className="flex items-center justify-center gap-2 py-4 text-[10px] uppercase tracking-[0.2em] text-foreground/60">
               <span>by</span>
               <Image

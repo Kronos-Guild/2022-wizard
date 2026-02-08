@@ -12,11 +12,11 @@ export function WizardLayout({ sidebar, preview }: WizardLayoutProps) {
             {sidebar}
           </div>
         </aside>
-        <main className="min-w-0 flex-1">
+        <section className="min-w-0 flex-1" aria-label="Code preview">
           <div className="rounded-2xl border border-foreground/10 bg-neutral-50 dark:bg-neutral-900 p-4 shadow-sm sm:p-6">
             {preview}
           </div>
-        </main>
+        </section>
       </div>
     </div>
   );

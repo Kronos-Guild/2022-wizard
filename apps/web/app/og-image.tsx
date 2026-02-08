@@ -10,7 +10,8 @@ export const ogContentType = "image/png";
 async function loadFont() {
   // Use Inter SemiBold (600) from Google Fonts - reliable TTF source
   const fontResponse = await fetch(
-    "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYMZg.ttf"
+    "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYMZg.ttf",
+    { cache: "force-cache" }
   );
   return fontResponse.arrayBuffer();
 }

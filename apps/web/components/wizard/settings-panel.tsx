@@ -16,6 +16,8 @@ import {
 
 interface SettingsPanelProps {
   state: WizardState;
+  /** Prefix for HTML `id` attributes to avoid duplicates when rendered in multiple locations (e.g. sidebar + drawer). */
+  idPrefix?: string;
   onNameChange: (value: string) => void;
   onSymbolChange: (value: string) => void;
   onDecimalsChange: (value: number) => void;
@@ -33,6 +35,7 @@ const SECTION_LABEL =
 
 export const SettingsPanel = memo(function SettingsPanel({
   state,
+  idPrefix = "",
   onNameChange,
   onSymbolChange,
   onDecimalsChange,
@@ -44,6 +47,7 @@ export const SettingsPanel = memo(function SettingsPanel({
   onFeeBpsChange,
   onMaxFeeChange,
 }: SettingsPanelProps) {
+  const pid = (id: string) => (idPrefix ? `${idPrefix}-${id}` : id);
   const isNonTransferableDisabled = state.extensions.transferFee;
   const isTransferFeeDisabled = state.extensions.nonTransferable;
   const transferFeeConfigRef = useRef<HTMLDivElement>(null);
@@ -109,12 +113,12 @@ export const SettingsPanel = memo(function SettingsPanel({
     <div className="scrollbar-subtle flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto py-6 px-3">
       {/* Token Basics */}
       <div>
-        <p className={SECTION_LABEL}>Token Basics</p>
+        <h2 className={SECTION_LABEL}>Token Basics</h2>
         <div className="mt-4 grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor={pid("name")}>Name</Label>
             <Input
-              id="name"
+              id={pid("name")}
               value={state.name}
               onChange={handleNameChange}
               placeholder="MyToken"
@@ -122,18 +126,18 @@ export const SettingsPanel = memo(function SettingsPanel({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="symbol">Symbol</Label>
+              <Label htmlFor={pid("symbol")}>Symbol</Label>
               <Input
-                id="symbol"
+                id={pid("symbol")}
                 value={state.symbol}
                 onChange={handleSymbolChange}
                 placeholder="MTK"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="decimals">Decimals</Label>
+              <Label htmlFor={pid("decimals")}>Decimals</Label>
               <Input
-                id="decimals"
+                id={pid("decimals")}
                 type="number"
                 min={0}
                 max={9}
@@ -147,21 +151,22 @@ export const SettingsPanel = memo(function SettingsPanel({
 
       {/* Mint Authority */}
       <div>
-        <p className={SECTION_LABEL}>Mint Authority</p>
+        <h2 id={pid("authority-label")} className={SECTION_LABEL}>Mint Authority</h2>
         <RadioGroup
           value={state.authority}
           onValueChange={handleAuthorityChange}
           className="mt-3"
+          aria-labelledby={pid("authority-label")}
         >
           <div className="flex items-center gap-3 rounded-lg border border-input px-3 py-2.5">
-            <RadioGroupItem value="keypair" id="keypair" />
-            <Label htmlFor="keypair" className="flex-1 cursor-pointer font-normal">
+            <RadioGroupItem value="keypair" id={pid("keypair")} />
+            <Label htmlFor={pid("keypair")} className="flex-1 cursor-pointer font-normal">
               Keypair
             </Label>
           </div>
           <div className="flex items-center gap-3 rounded-lg border border-input px-3 py-2.5">
-            <RadioGroupItem value="pda" id="pda" />
-            <Label htmlFor="pda" className="flex-1 cursor-pointer font-normal">
+            <RadioGroupItem value="pda" id={pid("pda")} />
+            <Label htmlFor={pid("pda")} className="flex-1 cursor-pointer font-normal">
               PDA (Program-controlled)
             </Label>
           </div>
@@ -170,27 +175,28 @@ export const SettingsPanel = memo(function SettingsPanel({
 
       {/* Cluster */}
       <div>
-        <p className={SECTION_LABEL}>Cluster</p>
+        <h2 id={pid("cluster-label")} className={SECTION_LABEL}>Cluster</h2>
         <RadioGroup
           value={state.cluster}
           onValueChange={handleClusterChange}
           className="mt-3"
+          aria-labelledby={pid("cluster-label")}
         >
           <div className="flex items-center gap-3 rounded-lg border border-input px-3 py-2.5">
-            <RadioGroupItem value="devnet" id="devnet" />
-            <Label htmlFor="devnet" className="flex-1 cursor-pointer font-normal">
+            <RadioGroupItem value="devnet" id={pid("devnet")} />
+            <Label htmlFor={pid("devnet")} className="flex-1 cursor-pointer font-normal">
               Devnet
             </Label>
           </div>
           <div className="flex items-center gap-3 rounded-lg border border-input px-3 py-2.5">
-            <RadioGroupItem value="mainnet-beta" id="mainnet-beta" />
-            <Label htmlFor="mainnet-beta" className="flex-1 cursor-pointer font-normal">
+            <RadioGroupItem value="mainnet-beta" id={pid("mainnet-beta")} />
+            <Label htmlFor={pid("mainnet-beta")} className="flex-1 cursor-pointer font-normal">
               Mainnet Beta
             </Label>
           </div>
           <div className="flex items-center gap-3 rounded-lg border border-input px-3 py-2.5">
-            <RadioGroupItem value="localnet" id="localnet" />
-            <Label htmlFor="localnet" className="flex-1 cursor-pointer font-normal">
+            <RadioGroupItem value="localnet" id={pid("localnet")} />
+            <Label htmlFor={pid("localnet")} className="flex-1 cursor-pointer font-normal">
               Localnet
             </Label>
           </div>
@@ -199,7 +205,7 @@ export const SettingsPanel = memo(function SettingsPanel({
 
       {/* Extensions */}
       <div>
-        <p className={SECTION_LABEL}>Extensions</p>
+        <h2 className={SECTION_LABEL}>Extensions</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           <ExtensionPill label="Metadata" active disabled hint="Required" />
           <ExtensionPill
@@ -243,13 +249,13 @@ export const SettingsPanel = memo(function SettingsPanel({
             gridTemplateRows: state.extensions.transferFee ? "1fr" : "0fr",
           }}
         >
-          <div className="overflow-hidden">
+          <div className="overflow-hidden" inert={!state.extensions.transferFee || undefined} aria-hidden={!state.extensions.transferFee}>
             <div className="pt-4">
               <div className="grid gap-4 rounded-lg border border-input bg-muted/30 p-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="feeBps">Fee (Basis Points)</Label>
+                  <Label htmlFor={pid("feeBps")}>Fee (Basis Points)</Label>
                   <Input
-                    id="feeBps"
+                    id={pid("feeBps")}
                     type="number"
                     min={0}
                     max={10000}
@@ -261,9 +267,9 @@ export const SettingsPanel = memo(function SettingsPanel({
                   </p>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="maxFee">Max Fee (tokens)</Label>
+                  <Label htmlFor={pid("maxFee")}>Max Fee (tokens)</Label>
                   <Input
-                    id="maxFee"
+                    id={pid("maxFee")}
                     type="number"
                     min={0}
                     value={state.transferFeeConfig.maxFee}
@@ -307,6 +313,9 @@ const ExtensionPill = memo(function ExtensionPill({
       size="sm"
       onClick={isTrulyDisabled ? undefined : onToggle}
       disabled={disabled && !active && !soon}
+      aria-pressed={!soon ? active : undefined}
+      aria-disabled={isTrulyDisabled || undefined}
+      aria-label={soon ? `${label} (coming soon)` : undefined}
       className={cn(
         "h-8 rounded-full gap-1.5 transition-all",
         active && "bg-brand text-brand-foreground hover:bg-brand/90",
@@ -317,7 +326,7 @@ const ExtensionPill = memo(function ExtensionPill({
       {active && <Check className="size-3" />}
       <span>{label}</span>
       {soon && (
-        <span className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-foreground/50">
+        <span className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-foreground/60">
           Soon
         </span>
       )}

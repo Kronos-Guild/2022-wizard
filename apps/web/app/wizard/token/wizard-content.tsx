@@ -21,26 +21,29 @@ export function WizardContent() {
     updateMaxFee,
   } = useWizardState();
 
-  const settings = (
-    <SettingsPanel
-      state={state}
-      onNameChange={updateName}
-      onSymbolChange={updateSymbol}
-      onDecimalsChange={updateDecimals}
-      onAuthorityChange={updateAuthority}
-      onClusterChange={updateCluster}
-      onCloseMintChange={updateCloseMint}
-      onNonTransferableChange={updateNonTransferable}
-      onTransferFeeChange={updateTransferFee}
-      onFeeBpsChange={updateFeeBps}
-      onMaxFeeChange={updateMaxFee}
-    />
-  );
+  const settingsProps = {
+    state,
+    onNameChange: updateName,
+    onSymbolChange: updateSymbol,
+    onDecimalsChange: updateDecimals,
+    onAuthorityChange: updateAuthority,
+    onClusterChange: updateCluster,
+    onCloseMintChange: updateCloseMint,
+    onNonTransferableChange: updateNonTransferable,
+    onTransferFeeChange: updateTransferFee,
+    onFeeBpsChange: updateFeeBps,
+    onMaxFeeChange: updateMaxFee,
+  } as const;
 
   return (
     <>
-      <WizardLayout sidebar={settings} preview={<CodePreview state={state} />} />
-      <SettingsDrawer>{settings}</SettingsDrawer>
+      <WizardLayout
+        sidebar={<SettingsPanel {...settingsProps} idPrefix="sidebar" />}
+        preview={<CodePreview state={state} />}
+      />
+      <SettingsDrawer>
+        <SettingsPanel {...settingsProps} idPrefix="drawer" />
+      </SettingsDrawer>
     </>
   );
 }
